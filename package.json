@@ -10,6 +10,7 @@
     "probe:viewer:stub": "node tools/viewer-network-probe.example.mjs",
     "probe:viewer": "node tools/viewer-network-probe.mjs",
     "probe:viewer:install": "npx playwright install chromium",
+    "probe:frames": "node tools/viewer-frames-capture.mjs",
     "probe:summarize": "node tools/summarize-probe-report.mjs"
   },
   "dependencies": {
