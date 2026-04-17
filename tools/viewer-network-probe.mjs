@@ -118,6 +118,36 @@ function extractNumericOrder(filename) {
   return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
 }
 
+function isAcceptedManifestAsset(response, filename) {
+  if (response.kind !== 'drm-image') {
+    return false;
+  }
+
+  if (!filename) {
+    return false;
+  }
+
+  const normalizedFilename = filename.toLowerCase();
+
+  if (!/\.(webp|jpg|jpeg|png)$/i.test(normalizedFilename)) {
+    return false;
+  }
+
+  if (/loading\.(gif|webp|png|jpg|jpeg)$/i.test(normalizedFilename)) {
+    return false;
+  }
+
+  if (/^(loading|spinner|thumb)\b/i.test(normalizedFilename)) {
+    return false;
+  }
+
+  if (/viewer\//i.test(response.url) || /\/images\/viewer\//i.test(response.url)) {
+    return false;
+  }
+
+  return true;
+}
+
 function buildManifest({ targetUrl, html, responses }) {
   const contentSnippet = extractContentSnippet(html);
   const frameCount = extractFrameCount(contentSnippet);
@@ -129,7 +159,9 @@ function buildManifest({ targetUrl, html, responses }) {
   const seenUrls = new Set();
 
   responses.forEach((response, captureIndex) => {
-    if (response.kind !== 'drm-image' && response.kind !== 'image') {
+    const filename = extractFilenameFromUrl(response.url);
+
+    if (!isAcceptedManifestAsset(response, filename)) {
       return;
     }
 
@@ -139,14 +171,12 @@ function buildManifest({ targetUrl, html, responses }) {
 
     seenUrls.add(response.url);
 
-    const filename = extractFilenameFromUrl(response.url);
-
     orderedCandidates.push({
       captureIndex,
       numericOrder: extractNumericOrder(filename),
       url: response.url,
       filename,
-      kind: response.kind === 'drm-image' ? 'drm-image' : 'image',
+      kind: 'drm-image',
     });
   });
 
