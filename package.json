@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "probe:viewer:stub": "node tools/viewer-network-probe.example.mjs",
-    "probe:viewer": "node tools/viewer-network-probe.mjs"
+    "probe:viewer": "node tools/viewer-network-probe.mjs",
+    "probe:viewer:install": "npx playwright install chromium"
   },
   "dependencies": {
     "next": "15.3.6",
@@ -20,6 +21,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "autoprefixer": "^10.4.21",
+    "playwright": "^1.53.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3"
