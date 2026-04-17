@@ -17,6 +17,8 @@ type CaptureResponse = {
   episodeId: string | null;
   materialCandidates: string[];
   estimatedPageCount: number;
+  contentSnippet: string | null;
+  pageFieldSignals: string[];
   notes: string[];
 };
 
@@ -103,6 +105,26 @@ export function CaptureForm() {
             </ul>
           ) : (
             <p className="mt-2">Nenhum sinal detectado ainda.</p>
+          )}
+
+          <p className="mt-4 font-semibold text-white">Sinais de campos de página</p>
+          {result.pageFieldSignals.length > 0 ? (
+            <ul className="mt-2 space-y-2">
+              {result.pageFieldSignals.map((signal) => (
+                <li key={signal}>• {signal}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2">Nenhum campo ligado a páginas apareceu ainda no trecho content.</p>
+          )}
+
+          <p className="mt-4 font-semibold text-white">Trecho do bloco content</p>
+          {result.contentSnippet ? (
+            <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 break-all text-slate-300">
+              {result.contentSnippet}
+            </div>
+          ) : (
+            <p className="mt-2">Nenhum trecho content foi extraído ainda.</p>
           )}
 
           <p className="mt-4 font-semibold text-white">Scripts relevantes</p>
