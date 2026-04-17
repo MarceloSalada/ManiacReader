@@ -16,6 +16,11 @@ function buildStatusLabel(manifest: ChapterManifest) {
   return 'Sem unidades capturadas';
 }
 
+function buildReaderImageUrl(src: string, referer: string) {
+  const params = new URLSearchParams({ src, referer });
+  return `/api/reader-image?${params.toString()}`;
+}
+
 export function ChapterView({ manifest }: ChapterViewProps) {
   const statusLabel = buildStatusLabel(manifest);
 
@@ -87,11 +92,10 @@ export function ChapterView({ manifest }: ChapterViewProps) {
 
             <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-slate-900 p-2">
               <img
-                src={unit.url}
+                src={buildReaderImageUrl(unit.url, manifest.targetUrl)}
                 alt={`Página ${unit.index}`}
                 loading={unit.index <= 2 ? 'eager' : 'lazy'}
                 className="h-auto w-full rounded-xl object-contain"
-                referrerPolicy="no-referrer"
               />
             </div>
           </article>
