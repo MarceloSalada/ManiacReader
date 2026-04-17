@@ -54,9 +54,9 @@ function extractScriptSnippets(html: string, maxCount = 8) {
   const relevant = matches
     .map((match) => match[1]?.trim() ?? '')
     .filter(Boolean)
-    .filter((script) => /episode|viewer|canvas|image|img|comic|manga|watch|api|json|material/i.test(script))
+    .filter((script) => /episode|viewer|canvas|image|img|comic|manga|watch|api|json|material|__next_f|content/i.test(script))
     .slice(0, maxCount)
-    .map((script) => script.replace(/\s+/g, ' ').slice(0, 800));
+    .map((script) => script.replace(/\s+/g, ' ').slice(0, 1200));
 
   return {
     total: relevant.length,
@@ -93,16 +93,31 @@ function extractMaterialCandidates(html: string, maxCount = 120) {
   return Array.from(new Set(found)).slice(0, maxCount);
 }
 
-function extractContentSnippet(html: string) {
+function extractContentSnippet(html: string, scriptSnippets: string[]) {
   const decoded = decodeHtmlEntities(html).replace(/\\\//g, '/');
-  const marker = '"content":{';
-  const index = decoded.indexOf(marker);
 
-  if (index === -1) {
-    return null;
+  const directMarkers = ['"content":{', '\\"content\\":{'];
+  for (const marker of directMarkers) {
+    const index = decoded.indexOf(marker);
+    if (index !== -1) {
+      return decoded.slice(index, index + 3200).replace(/\s+/g, ' ');
+    }
   }
 
-  return decoded.slice(index, index + 2200).replace(/\s+/g, ' ');
+  for (const snippet of scriptSnippets) {
+    const normalizedSnippet = decodeHtmlEntities(snippet).replace(/\\\//g, '/');
+    const directIndex = normalizedSnippet.indexOf('"content":{');
+    if (directIndex !== -1) {
+      return normalizedSnippet.slice(directIndex, directIndex + 2200).replace(/\s+/g, ' ');
+    }
+
+    const escapedIndex = normalizedSnippet.indexOf('\\"content\\":{');
+    if (escapedIndex !== -1) {
+      return normalizedSnippet.slice(escapedIndex, escapedIndex + 2200).replace(/\s+/g, ' ');
+    }
+  }
+
+  return null;
 }
 
 function extractPageFieldSignals(snippet: string | null) {
@@ -247,7 +262,7 @@ export async function startNicoNicoCapture(
   const { comicId, episodeId } = extractIds(html);
   const materialCandidates = extractMaterialCandidates(html);
   const estimatedPageCount = materialCandidates.length;
-  const contentSnippet = extractContentSnippet(html);
+  const contentSnippet = extractContentSnippet(html, scriptSnippets);
   const pageFieldSignals = extractPageFieldSignals(contentSnippet);
 
   return {
@@ -272,7 +287,7 @@ export async function startNicoNicoCapture(
       'O backend já buscou o HTML da página do capítulo.',
       'Scripts relevantes e possíveis endpoints do viewer foram extraídos.',
       'Materiais do CDN foram separados como candidatos de páginas do episódio.',
-      'Foi extraído um trecho maior do bloco content para procurar campos de página.',
+      'O parser agora tenta capturar o bloco content diretamente do payload do Next.',
       'Próxima etapa: validar se esses materiais representam o episódio inteiro e em qual ordem.',
     ],
   };
