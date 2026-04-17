@@ -16,7 +16,9 @@ export type CaptureChapterResult = {
   comicId: string | null;
   episodeId: string | null;
   materialCandidates: string[];
-  estimatedPageCount: number;
+  candidateMaterialCount: number;
+  frameCount: number | null;
+  playerType: string | null;
   contentSnippet: string | null;
   pageFieldSignals: string[];
   notes: string[];
@@ -100,7 +102,7 @@ function extractContentSnippet(html: string, scriptSnippets: string[]) {
   for (const marker of directMarkers) {
     const index = decoded.indexOf(marker);
     if (index !== -1) {
-      return decoded.slice(index, index + 3200).replace(/\s+/g, ' ');
+      return decoded.slice(index, index + 4200).replace(/\s+/g, ' ');
     }
   }
 
@@ -108,12 +110,12 @@ function extractContentSnippet(html: string, scriptSnippets: string[]) {
     const normalizedSnippet = decodeHtmlEntities(snippet).replace(/\\\//g, '/');
     const directIndex = normalizedSnippet.indexOf('"content":{');
     if (directIndex !== -1) {
-      return normalizedSnippet.slice(directIndex, directIndex + 2200).replace(/\s+/g, ' ');
+      return normalizedSnippet.slice(directIndex, directIndex + 3200).replace(/\s+/g, ' ');
     }
 
     const escapedIndex = normalizedSnippet.indexOf('\\"content\\":{');
     if (escapedIndex !== -1) {
-      return normalizedSnippet.slice(escapedIndex, escapedIndex + 2200).replace(/\s+/g, ' ');
+      return normalizedSnippet.slice(escapedIndex, escapedIndex + 3200).replace(/\s+/g, ' ');
     }
   }
 
@@ -133,9 +135,29 @@ function extractPageFieldSignals(snippet: string | null) {
     ['material', /"material"|materials/i],
     ['viewer', /viewer/i],
     ['canvas', /canvas/i],
+    ['frame', /"frame"|counter":\{[^}]*"frame"/i],
+    ['playerType', /player_type/i],
   ];
 
   return fieldPatterns.filter(([, pattern]) => pattern.test(snippet)).map(([label]) => label);
+}
+
+function extractFrameCount(snippet: string | null) {
+  if (!snippet) {
+    return null;
+  }
+
+  const match = snippet.match(/counter":\{[^}]*"frame":(\d+)/i) ?? snippet.match(/"frame":(\d+)/i);
+  return match?.[1] ? Number(match[1]) : null;
+}
+
+function extractPlayerType(snippet: string | null) {
+  if (!snippet) {
+    return null;
+  }
+
+  const match = snippet.match(/"player_type":"([^"]+)"/i);
+  return match?.[1] ?? null;
 }
 
 export function normalizeNicoNicoUrl(rawUrl: string) {
@@ -234,7 +256,9 @@ export async function startNicoNicoCapture(
       comicId: null,
       episodeId: null,
       materialCandidates: [],
-      estimatedPageCount: 0,
+      candidateMaterialCount: 0,
+      frameCount: null,
+      playerType: null,
       contentSnippet: null,
       pageFieldSignals: [],
       notes: [
@@ -261,9 +285,11 @@ export async function startNicoNicoCapture(
   const endpointCandidates = extractEndpointCandidates(html);
   const { comicId, episodeId } = extractIds(html);
   const materialCandidates = extractMaterialCandidates(html);
-  const estimatedPageCount = materialCandidates.length;
+  const candidateMaterialCount = materialCandidates.length;
   const contentSnippet = extractContentSnippet(html, scriptSnippets);
   const pageFieldSignals = extractPageFieldSignals(contentSnippet);
+  const frameCount = extractFrameCount(contentSnippet);
+  const playerType = extractPlayerType(contentSnippet);
 
   return {
     source: 'Nico Nico',
@@ -279,16 +305,18 @@ export async function startNicoNicoCapture(
     comicId,
     episodeId,
     materialCandidates,
-    estimatedPageCount,
+    candidateMaterialCount,
+    frameCount,
+    playerType,
     contentSnippet,
     pageFieldSignals,
     notes: [
       'A URL foi validada contra a fonte alvo inicial.',
       'O backend já buscou o HTML da página do capítulo.',
       'Scripts relevantes e possíveis endpoints do viewer foram extraídos.',
-      'Materiais do CDN foram separados como candidatos de páginas do episódio.',
-      'O parser agora tenta capturar o bloco content diretamente do payload do Next.',
-      'Próxima etapa: validar se esses materiais representam o episódio inteiro e em qual ordem.',
+      'Materiais do CDN foram separados como candidatos iniciais, mas não representam a contagem real de leitura.',
+      'A leitura real agora deve usar frameCount/playerType do payload antes de tentar montar páginas.',
+      'Próxima etapa: interceptar as requisições do viewer para descobrir de onde saem os frames/páginas completos.',
     ],
   };
 }
