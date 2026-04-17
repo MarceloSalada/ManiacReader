@@ -17,8 +17,8 @@ const EXPLICIT_HOSTS_OF_INTEREST = [
   'api.nicomanga.jp',
   'res.ads.nicovideo.jp',
 ];
-const MAX_STAGNANT_CYCLES = 4;
-const MAX_CAPTURE_CYCLES = 18;
+const MAX_STAGNANT_CYCLES = 8;
+const MAX_CAPTURE_CYCLES = 36;
 const RECENT_NETWORK_WINDOW = 12;
 const CANDIDATE_URL_PATTERN = /manifest|content|episode|viewer|frame|page|image|drm|api|scroll|crop|reading/i;
 const PAYLOAD_HINT_PATTERN =
@@ -399,6 +399,35 @@ async function loadPlaywright() {
   }
 }
 
+async function safeTap(page) {
+  try {
+    await page.mouse.click(195, 420);
+    await page.waitForTimeout(600);
+  } catch {
+    return null;
+  }
+}
+
+async function safeScroll(page, distance, waitMs) {
+  try {
+    await page.evaluate((value) => {
+      window.scrollBy(0, value);
+    }, distance);
+    await page.waitForTimeout(waitMs);
+  } catch {
+    return null;
+  }
+}
+
+async function safePageDown(page, waitMs) {
+  try {
+    await page.keyboard.press('PageDown');
+    await page.waitForTimeout(waitMs);
+  } catch {
+    return null;
+  }
+}
+
 async function performCaptureCycles({ page, getCurrentCount, getTargetCount, persistPartial }) {
   console.log('[Probe] Iniciando captura por ciclos de novidade...');
 
@@ -415,26 +444,20 @@ async function performCaptureCycles({ page, getCurrentCount, getTargetCount, per
 
     console.log(`[Probe] Ciclo ${cycle}: antes=${beforeCount}, alvo=${targetCount ?? 'desconhecido'}`);
 
-    await page.evaluate((distance) => {
-      window.scrollBy(0, distance);
-    }, 420);
-    await page.waitForTimeout(1600);
+    await safeTap(page);
+    await safeScroll(page, 260, 1300);
+    await safeScroll(page, Math.floor(844 * 0.45), 1500);
+    await safePageDown(page, 1400);
+    await safeScroll(page, Math.floor(844 * 0.65), 1700);
 
-    await page.evaluate(() => {
-      window.scrollBy(0, Math.floor(window.innerHeight * 0.55));
-    });
-    await page.waitForTimeout(1400);
-
-    if (cycle % 2 === 0) {
-      await page.keyboard.press('PageDown').catch(() => null);
-      await page.waitForTimeout(1600);
+    if (cycle % 3 === 0) {
+      await safeScroll(page, -180, 1000);
+      await safeScroll(page, 240, 1200);
     }
 
-    if (cycle % 4 === 0) {
-      await page.evaluate(() => {
-        window.scrollBy(0, Math.floor(window.innerHeight * 0.85));
-      });
-      await page.waitForTimeout(1800);
+    if (cycle % 5 === 0) {
+      await safeTap(page);
+      await safeScroll(page, Math.floor(844 * 0.8), 1800);
     }
 
     const afterCount = getCurrentCount();
@@ -461,7 +484,7 @@ async function performCaptureCycles({ page, getCurrentCount, getTargetCount, per
     }
   }
 
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(2200);
 }
 
 async function gotoWithRetry(page, targetUrl) {
