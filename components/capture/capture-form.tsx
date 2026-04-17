@@ -62,6 +62,10 @@ export function CaptureForm() {
     }
   }
 
+  const probeHref = result
+    ? `/probe?targetUrl=${encodeURIComponent(result.normalizedUrl)}&comicId=${encodeURIComponent(result.comicId ?? '')}&episodeId=${encodeURIComponent(result.episodeId ?? '')}&playerType=${encodeURIComponent(result.playerType ?? '')}&frameCount=${encodeURIComponent(String(result.frameCount ?? ''))}`
+    : '/probe';
+
   return (
     <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
       <h2 className="text-2xl font-semibold text-white">Importar capítulo</h2>
@@ -97,7 +101,7 @@ export function CaptureForm() {
 
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href="/probe"
+                href={probeHref}
                 className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-400/15"
               >
                 Ir para o probe
