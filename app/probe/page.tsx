@@ -2,8 +2,23 @@ import Link from 'next/link';
 
 import { getViewerProbeStubReport } from '@/lib/capture/viewer-network-probe-stub';
 
-export default function ProbePage() {
+type ProbePageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function readFirst(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function ProbePage({ searchParams }: ProbePageProps) {
+  const params = searchParams ? await searchParams : {};
   const report = getViewerProbeStubReport();
+
+  const targetUrl = readFirst(params.targetUrl) ?? report.targetUrl;
+  const comicId = readFirst(params.comicId) ?? 'não informado';
+  const episodeId = readFirst(params.episodeId) ?? 'não informado';
+  const playerType = readFirst(params.playerType) ?? 'não informado';
+  const frameCount = readFirst(params.frameCount) ?? 'não informado';
 
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground">
@@ -41,13 +56,21 @@ export default function ProbePage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <section className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
-            <h2 className="text-xl font-semibold text-white">Alvo inicial</h2>
-            <p className="mt-4 break-all text-sm leading-6 text-slate-300">{report.targetUrl}</p>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
-              <span className="font-semibold text-white">Fase:</span> {report.phase}
+            <h2 className="text-xl font-semibold text-white">Contexto recebido da captura</h2>
+            <p className="mt-4 break-all text-sm leading-6 text-slate-300">
+              <span className="font-semibold text-white">Target URL:</span> {targetUrl}
             </p>
             <p className="text-sm leading-6 text-slate-300">
-              <span className="font-semibold text-white">Status:</span> {report.status}
+              <span className="font-semibold text-white">Comic ID:</span> {comicId}
+            </p>
+            <p className="text-sm leading-6 text-slate-300">
+              <span className="font-semibold text-white">Episode ID:</span> {episodeId}
+            </p>
+            <p className="text-sm leading-6 text-slate-300">
+              <span className="font-semibold text-white">Player type:</span> {playerType}
+            </p>
+            <p className="text-sm leading-6 text-slate-300">
+              <span className="font-semibold text-white">Frame count:</span> {frameCount}
             </p>
           </section>
 
