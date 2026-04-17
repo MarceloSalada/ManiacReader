@@ -5,7 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const DEFAULT_TARGET_URL = 'https://sp.manga.nicovideo.jp/watch/mg197350';
-const DEFAULT_WAIT_MS = 25000;
+const DEFAULT_WAIT_MS = 9000;
 
 function extractEpisodeId(targetUrl) {
   const match = targetUrl.match(/\/watch\/(mg\d+)/i) ?? targetUrl.match(/\/episode\/([^/?#]+)/i);
@@ -44,6 +44,19 @@ async function main(targetUrl) {
 
   const page = await context.newPage();
   const runtimeEvents = [];
+  const pageState = {
+    crashed: false,
+    closed: false,
+    lastError: null,
+  };
+
+  page.on('crash', () => {
+    pageState.crashed = true;
+  });
+
+  page.on('close', () => {
+    pageState.closed = true;
+  });
 
   await page.exposeFunction('reportBlobProbeEvent', (event) => {
     runtimeEvents.push({
@@ -160,83 +173,106 @@ async function main(targetUrl) {
       Worker.prototype.postMessage = function (message, transfer) {
         safeReport({
           type: 'worker-postMessage',
-          workerScript: this?.__probeScriptUrl || 'unknown',
           messageType: message?.constructor?.name || typeof message,
           hasTransfer: Array.isArray(transfer) ? transfer.length > 0 : Boolean(transfer),
         });
         return originalPostMessage.call(this, message, transfer);
       };
-
-      const OriginalWorker = Worker;
-      // eslint-disable-next-line no-global-assign
-      Worker = function WorkerProxy(scriptURL, options) {
-        const worker = new OriginalWorker(scriptURL, options);
-        worker.__probeScriptUrl = String(scriptURL);
-        safeReport({
-          type: 'worker-created',
-          scriptURL: String(scriptURL),
-        });
-        return worker;
-      };
-      Worker.prototype = OriginalWorker.prototype;
     }
   });
 
-  console.log(`[BlobProbe] Abrindo ${targetUrl}`);
-  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
-  await page.waitForTimeout(2500);
+  const safeWait = async (ms) => {
+    if (page.isClosed()) return;
+    try {
+      await page.waitForTimeout(ms);
+    } catch (error) {
+      pageState.lastError = error instanceof Error ? error.message : String(error);
+    }
+  };
 
   const tap = async (x, y) => {
-    await page.mouse.click(x, y).catch(() => null);
-    await page.waitForTimeout(700);
+    if (page.isClosed()) return;
+    try {
+      await page.mouse.click(x, y);
+    } catch (error) {
+      pageState.lastError = error instanceof Error ? error.message : String(error);
+    }
+    await safeWait(500);
   };
 
-  const scrollBy = async (value, waitMs = 1400) => {
-    await page.evaluate((v) => window.scrollBy(0, v), value).catch(() => null);
-    await page.waitForTimeout(waitMs);
+  const scrollBy = async (value, waitMs = 1200) => {
+    if (page.isClosed()) return;
+    try {
+      await page.evaluate((v) => window.scrollBy(0, v), value);
+    } catch (error) {
+      pageState.lastError = error instanceof Error ? error.message : String(error);
+    }
+    await safeWait(waitMs);
   };
 
-  await tap(195, 420);
-  await scrollBy(500, 1500);
-  await scrollBy(700, 1600);
-  await tap(195, 420);
-  await scrollBy(900, 1800);
-  await page.waitForTimeout(DEFAULT_WAIT_MS);
+  const buildOutput = () => {
+    const interesting = runtimeEvents.filter((e) =>
+      [
+        'blob-constructed',
+        'blob-url-created',
+        'fetch-complete',
+        'response-arrayBuffer',
+        'response-blob',
+        'createImageBitmap',
+        'offscreen-convertToBlob',
+        'worker-postMessage',
+      ].includes(e.type),
+    );
 
-  const interesting = runtimeEvents.filter((e) =>
-    [
-      'blob-constructed',
-      'blob-url-created',
-      'fetch-complete',
-      'response-arrayBuffer',
-      'response-blob',
-      'createImageBitmap',
-      'offscreen-convertToBlob',
-      'worker-created',
-      'worker-postMessage',
-    ].includes(e.type),
-  );
-
-  const output = {
-    targetUrl,
-    episodeId,
-    timestamp: new Date().toISOString(),
-    eventCount: runtimeEvents.length,
-    interestingCount: interesting.length,
-    runtimeEvents,
+    return {
+      targetUrl,
+      episodeId,
+      timestamp: new Date().toISOString(),
+      eventCount: runtimeEvents.length,
+      interestingCount: interesting.length,
+      pageState,
+      runtimeEvents,
+      interesting,
+    };
   };
 
-  const outPath = path.join(debugDir, 'blob-probe.json');
-  fs.writeFileSync(outPath, JSON.stringify(output, null, 2), 'utf8');
+  const persistOutput = () => {
+    const output = buildOutput();
+    const outPath = path.join(debugDir, 'blob-probe.json');
+    fs.writeFileSync(outPath, JSON.stringify(output, null, 2), 'utf8');
+    return { output, outPath };
+  };
 
-  console.log(`[BlobProbe] interesting events: ${interesting.length}`);
-  interesting.slice(0, 60).forEach((event, index) => {
-    console.log(`[${index}] ${JSON.stringify(event)}`);
-  });
-  console.log(`[BlobProbe] Saída salva em ${outPath}`);
+  try {
+    console.log(`[BlobProbe] Abrindo ${targetUrl}`);
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
+    await safeWait(1800);
 
-  await browser.close();
+    await tap(195, 420);
+    await scrollBy(400, 1200);
+    await scrollBy(520, 1300);
+    await tap(195, 420);
+    await scrollBy(650, 1500);
+    await safeWait(DEFAULT_WAIT_MS);
+  } catch (error) {
+    pageState.lastError = error instanceof Error ? error.message : String(error);
+    console.warn('[BlobProbe] Execução principal falhou, mas a saída parcial será salva.');
+  } finally {
+    const { output, outPath } = persistOutput();
+    console.log(`[BlobProbe] interesting events: ${output.interestingCount}`);
+    output.interesting.slice(0, 60).forEach((event, index) => {
+      console.log(`[${index}] ${JSON.stringify(event)}`);
+    });
+    if (output.pageState.crashed || output.pageState.closed || output.pageState.lastError) {
+      console.log(`[BlobProbe] pageState=${JSON.stringify(output.pageState)}`);
+    }
+    console.log(`[BlobProbe] Saída salva em ${outPath}`);
+
+    if (browser.isConnected()) {
+      await browser.close().catch(() => null);
+    }
+  }
 }
 
 const targetUrl = process.argv[2] || DEFAULT_TARGET_URL;
