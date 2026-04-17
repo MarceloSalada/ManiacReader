@@ -12,6 +12,8 @@ const DOMAINS_OF_INTEREST = [
   'drm.cdn.nicomanga.jp',
   'res.ads.nicovideo.jp',
 ];
+const MAX_STAGNANT_CYCLES = 4;
+const MAX_CAPTURE_CYCLES = 18;
 
 function isInterestingUrl(url) {
   return DOMAINS_OF_INTEREST.some((domain) => url.includes(domain));
@@ -246,6 +248,19 @@ function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html })
   return { manifest, reportPath, manifestPath };
 }
 
+function getAcceptedCaptureCount(responses) {
+  const seenUrls = new Set();
+
+  responses.forEach((response) => {
+    const filename = extractFilenameFromUrl(response.url);
+    if (isAcceptedManifestAsset(response, filename)) {
+      seenUrls.add(response.url);
+    }
+  });
+
+  return seenUrls.size;
+}
+
 async function loadPlaywright() {
   try {
     return await import('playwright');
@@ -256,31 +271,69 @@ async function loadPlaywright() {
   }
 }
 
-async function performProgressiveScroll(page) {
-  console.log('[Probe] Iniciando rolagem progressiva longa...');
+async function performCaptureCycles({ page, getCurrentCount, getTargetCount, persistPartial }) {
+  console.log('[Probe] Iniciando captura por ciclos de novidade...');
 
-  for (let cycle = 0; cycle < 4; cycle += 1) {
-    for (let step = 0; step < 6; step += 1) {
-      await page.evaluate((distance) => {
-        window.scrollBy(0, distance);
-      }, 500);
-      await page.waitForTimeout(1200);
+  let stagnantCycles = 0;
+
+  for (let cycle = 1; cycle <= MAX_CAPTURE_CYCLES; cycle += 1) {
+    const beforeCount = getCurrentCount();
+    const targetCount = getTargetCount();
+
+    if (typeof targetCount === 'number' && beforeCount >= targetCount) {
+      console.log(`[Probe] Alvo atingido antes do ciclo ${cycle}: ${beforeCount}/${targetCount}.`);
+      break;
     }
+
+    console.log(`[Probe] Ciclo ${cycle}: antes=${beforeCount}, alvo=${targetCount ?? 'desconhecido'}`);
+
+    await page.evaluate((distance) => {
+      window.scrollBy(0, distance);
+    }, 420);
+    await page.waitForTimeout(1600);
 
     await page.evaluate(() => {
-      window.scrollBy(0, Math.floor(window.innerHeight * 0.75));
+      window.scrollBy(0, Math.floor(window.innerHeight * 0.55));
     });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1400);
+
+    if (cycle % 2 === 0) {
+      await page.keyboard.press('PageDown').catch(() => null);
+      await page.waitForTimeout(1600);
+    }
+
+    if (cycle % 4 === 0) {
+      await page.evaluate(() => {
+        window.scrollBy(0, Math.floor(window.innerHeight * 0.85));
+      });
+      await page.waitForTimeout(1800);
+    }
+
+    const afterCount = getCurrentCount();
+    const delta = afterCount - beforeCount;
+
+    await persistPartial();
+
+    if (delta > 0) {
+      stagnantCycles = 0;
+      console.log(`[Probe] Novidade no ciclo ${cycle}: +${delta} URL(s). Total=${afterCount}`);
+    } else {
+      stagnantCycles += 1;
+      console.log(`[Probe] Sem novidade no ciclo ${cycle}. Estagnação=${stagnantCycles}/${MAX_STAGNANT_CYCLES}`);
+    }
+
+    if (typeof targetCount === 'number' && afterCount >= targetCount) {
+      console.log(`[Probe] Alvo atingido no ciclo ${cycle}: ${afterCount}/${targetCount}.`);
+      break;
+    }
+
+    if (stagnantCycles >= MAX_STAGNANT_CYCLES) {
+      console.log(`[Probe] Encerrando por estagnação após ${stagnantCycles} ciclos sem novas URLs.`);
+      break;
+    }
   }
 
-  await page.evaluate(async () => {
-    for (let index = 0; index < 8; index += 1) {
-      window.scrollBy(0, Math.floor(window.innerHeight * 0.65));
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-    }
-  });
-
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(2500);
 }
 
 async function gotoWithRetry(page, targetUrl) {
@@ -329,6 +382,24 @@ async function runProbe(targetUrl) {
   const requests = [];
   const responses = [];
   const runtimeEvents = [];
+  let lastKnownHtml = '';
+  let detectedFrameCount = null;
+
+  const persistPartial = async () => {
+    lastKnownHtml = await page.content().catch(() => lastKnownHtml);
+    const { manifest, reportPath, manifestPath } = persistOutputs({
+      targetUrl,
+      requests,
+      responses,
+      runtimeEvents,
+      html: lastKnownHtml,
+    });
+    if (typeof manifest.frameCount === 'number') {
+      detectedFrameCount = manifest.frameCount;
+    }
+    console.log(`[Probe] Persistência parcial: ${manifest.capturedCount}/${manifest.frameCount ?? 'desconhecido'} -> ${manifestPath}`);
+    return { manifest, reportPath, manifestPath };
+  };
 
   await page.exposeFunction('reportProbeRuntimeEvent', (event) => {
     runtimeEvents.push({
@@ -510,21 +581,28 @@ async function runProbe(targetUrl) {
     }
   });
 
-  let lastKnownHtml = '';
-
   try {
     await gotoWithRetry(page, targetUrl);
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
     await page.waitForTimeout(2500);
 
     lastKnownHtml = await page.content().catch(() => '');
+    const firstPersist = await persistPartial();
+    if (typeof firstPersist.manifest.frameCount === 'number') {
+      detectedFrameCount = firstPersist.manifest.frameCount;
+    }
 
     try {
-      await performProgressiveScroll(page);
+      await performCaptureCycles({
+        page,
+        getCurrentCount: () => getAcceptedCaptureCount(responses),
+        getTargetCount: () => detectedFrameCount,
+        persistPartial,
+      });
     } catch (scrollError) {
-      console.warn('[Probe] A rolagem falhou, mas a captura parcial será salva.');
+      console.warn('[Probe] Os ciclos de captura falharam, mas a captura parcial será mantida.');
       if (scrollError instanceof Error) {
-        console.warn(`[Probe] Motivo da falha na rolagem: ${scrollError.message}`);
+        console.warn(`[Probe] Motivo da falha nos ciclos: ${scrollError.message}`);
       }
     }
 
@@ -540,9 +618,7 @@ async function runProbe(targetUrl) {
 
     console.log(`[Probe] Relatório gerado: ${reportPath}`);
     console.log(`[Probe] Manifesto gerado: ${manifestPath}`);
-    console.log(
-      `[Probe] Captura consolidada: ${manifest.capturedCount} unidade(s) / ${manifest.frameCount ?? 'frameCount não detectado'}`,
-    );
+    console.log(`[Probe] Captura consolidada: ${manifest.capturedCount} unidade(s) / ${manifest.frameCount ?? 'frameCount não detectado'}`);
   } catch (error) {
     console.error('[Probe] Erro durante a captura:', error);
 
