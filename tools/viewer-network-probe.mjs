@@ -19,6 +19,7 @@ const EXPLICIT_HOSTS_OF_INTEREST = [
 ];
 const MAX_STAGNANT_CYCLES = 4;
 const MAX_CAPTURE_CYCLES = 18;
+const RECENT_NETWORK_WINDOW = 12;
 const CANDIDATE_URL_PATTERN = /manifest|content|episode|viewer|frame|page|image|drm|api|scroll|crop|reading/i;
 const PAYLOAD_HINT_PATTERN =
   /6200950|6200951|drm\.cdn\.nicomanga\.jp|deliver\.cdn\.nicomanga\.jp|frame|page|viewer|episode|image|content|scroll|crop|reading/i;
@@ -290,9 +291,54 @@ function buildCandidateFindings(responses) {
   return findings.slice(0, 20);
 }
 
+function buildBlobCorrelations({ runtimeEvents, requests, responses }) {
+  const blobEvents = runtimeEvents.filter((event) => event?.type === 'blob');
+
+  return blobEvents.map((event, index) => {
+    const responseIndex = responses.findLastIndex(
+      (response) => typeof response.observedAt === 'string' && response.observedAt <= event.timestamp,
+    );
+    const requestIndex = requests.findLastIndex(
+      (request) => typeof request.observedAt === 'string' && request.observedAt <= event.timestamp,
+    );
+
+    const recentResponses = responses
+      .slice(Math.max(0, responseIndex - (RECENT_NETWORK_WINDOW - 1)), responseIndex + 1)
+      .map((response) => ({
+        observedAt: response.observedAt,
+        url: response.url,
+        hostname: response.hostname,
+        kind: response.kind,
+        status: response.status,
+        contentType: response.contentType,
+        jsonKeys: response.jsonKeys,
+        payloadExcerpt:
+          typeof response.payloadExcerpt === 'string' ? response.payloadExcerpt.slice(0, 500) : response.payloadExcerpt,
+      }));
+
+    const recentRequests = requests
+      .slice(Math.max(0, requestIndex - (RECENT_NETWORK_WINDOW - 1)), requestIndex + 1)
+      .map((request) => ({
+        observedAt: request.observedAt,
+        url: request.url,
+        hostname: request.hostname,
+        method: request.method,
+        resourceType: request.resourceType,
+      }));
+
+    return {
+      index,
+      blobEvent: event,
+      recentRequests,
+      recentResponses,
+    };
+  });
+}
+
 function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html }) {
   const manifest = buildManifest({ targetUrl, html, responses });
   const candidateFindings = buildCandidateFindings(responses);
+  const blobCorrelations = buildBlobCorrelations({ runtimeEvents, requests, responses });
 
   const report = {
     targetUrl,
@@ -306,6 +352,7 @@ function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html })
     responses,
     runtimeEvents,
     candidateFindings,
+    blobCorrelations,
     manifestSummary: {
       episodeId: manifest.episodeId,
       comicId: manifest.comicId,
@@ -325,7 +372,7 @@ function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html })
   const manifestPath = path.join(manifestDir, `${episodeId}.json`);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 
-  return { manifest, reportPath, manifestPath, candidateFindings };
+  return { manifest, reportPath, manifestPath, candidateFindings, blobCorrelations };
 }
 
 function getAcceptedCaptureCount(responses) {
@@ -468,7 +515,7 @@ async function runProbe(targetUrl) {
 
   const persistPartial = async () => {
     lastKnownHtml = await page.content().catch(() => lastKnownHtml);
-    const { manifest, reportPath, manifestPath, candidateFindings } = persistOutputs({
+    const { manifest, reportPath, manifestPath, candidateFindings, blobCorrelations } = persistOutputs({
       targetUrl,
       requests,
       responses,
@@ -482,7 +529,10 @@ async function runProbe(targetUrl) {
     if (candidateFindings.length > 0) {
       console.log(`[Probe] Candidatos de índice detectados: ${candidateFindings.length}`);
     }
-    return { manifest, reportPath, manifestPath, candidateFindings };
+    if (blobCorrelations.length > 0) {
+      console.log(`[Probe] Blob correlations detectadas: ${blobCorrelations.length}`);
+    }
+    return { manifest, reportPath, manifestPath, candidateFindings, blobCorrelations };
   };
 
   await page.exposeFunction('reportProbeRuntimeEvent', (event) => {
@@ -610,6 +660,7 @@ async function runProbe(targetUrl) {
     }
 
     requests.push({
+      observedAt: new Date().toISOString(),
       url,
       hostname: extractHostname(url),
       method: request.method(),
@@ -647,6 +698,7 @@ async function runProbe(targetUrl) {
     }
 
     responses.push({
+      observedAt: new Date().toISOString(),
       url,
       hostname: extractHostname(url),
       status,
@@ -694,7 +746,7 @@ async function runProbe(targetUrl) {
 
     lastKnownHtml = await page.content().catch(() => lastKnownHtml);
 
-    const { manifest, reportPath, manifestPath, candidateFindings } = persistOutputs({
+    const { manifest, reportPath, manifestPath, candidateFindings, blobCorrelations } = persistOutputs({
       targetUrl,
       requests,
       responses,
@@ -706,11 +758,12 @@ async function runProbe(targetUrl) {
     console.log(`[Probe] Manifesto gerado: ${manifestPath}`);
     console.log(`[Probe] Captura consolidada: ${manifest.capturedCount} unidade(s) / ${manifest.frameCount ?? 'frameCount não detectado'}`);
     console.log(`[Probe] Endpoints candidatos destacados: ${candidateFindings.length}`);
+    console.log(`[Probe] Blob correlations consolidadas: ${blobCorrelations.length}`);
   } catch (error) {
     console.error('[Probe] Erro durante a captura:', error);
 
     try {
-      const { manifest, reportPath, manifestPath, candidateFindings } = persistOutputs({
+      const { manifest, reportPath, manifestPath, candidateFindings, blobCorrelations } = persistOutputs({
         targetUrl,
         requests,
         responses,
@@ -721,6 +774,7 @@ async function runProbe(targetUrl) {
       console.log(`[Probe] Manifesto parcial salvo em erro: ${manifestPath}`);
       console.log(`[Probe] Captura parcial disponível: ${manifest.capturedCount} unidade(s).`);
       console.log(`[Probe] Endpoints candidatos destacados em erro: ${candidateFindings.length}`);
+      console.log(`[Probe] Blob correlations destacadas em erro: ${blobCorrelations.length}`);
     } catch (persistError) {
       console.error('[Probe] Também falhou ao salvar a saída parcial:', persistError);
     }
