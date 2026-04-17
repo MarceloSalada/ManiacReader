@@ -16,6 +16,27 @@ export default function ProbePage() {
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">probe visível no deploy</p>
           <h1 className="mt-2 text-3xl font-bold text-white">Viewer Probe Stub</h1>
           <p className="mt-4 text-sm leading-6 text-slate-300">{report.message}</p>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <a
+              href="/api/viewer-probe-stub"
+              className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-400/15"
+            >
+              Abrir JSON do probe
+            </a>
+            <a
+              href="/api/viewer-network-runbook"
+              className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-slate-900"
+            >
+              Abrir JSON do runbook
+            </a>
+            <a
+              href="/api/project-status"
+              className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-slate-900"
+            >
+              Abrir JSON do status
+            </a>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
