@@ -13,7 +13,8 @@ Base limpa para o recomeço do MangaX 2.0.
 
 1. Validar a fonte alvo no backend.
 2. Identificar como o viewer entrega a leitura real.
-3. Só depois montar o reader final.
+3. Transformar a captura real em manifesto utilizável pelo reader.
+4. Só depois avançar para proxy, OCR e tradução.
 
 ## Fonte alvo inicial
 
@@ -23,7 +24,7 @@ Base limpa para o recomeço do MangaX 2.0.
 
 - `/` — home
 - `/import` — inspeção experimental do capítulo
-- `/reader` — shell do leitor
+- `/reader` — reader guiado por manifesto
 - `/viewer-network-phase` — descrição da próxima fase
 - `/status` — status consolidado do projeto
 
@@ -73,8 +74,55 @@ Foi adicionada uma fase explícita de planejamento para essa próxima etapa:
 
 - `lib/capture/viewer-network-phase.ts`
 - `lib/capture/viewer-network-runbook.ts`
-- `tools/viewer-network-probe.example.ts`
+- `tools/viewer-network-probe.example.mjs`
+- `tools/viewer-network-probe.mjs`
 - `GET /api/viewer-network-phase`
 - `GET /api/viewer-network-runbook`
 
-Esses arquivos não fingem executar a interceptação. Eles deixam clara a próxima fase e fornecem uma base objetiva para a implementação real fora do fluxo simples da Vercel Hobby.
+## Fluxo novo do reader
+
+O probe real agora também gera um manifesto local para o episódio capturado:
+
+- `public/manifests/<episodeId>.json`
+
+O `reader` passou a consumir esse manifesto.
+
+Exemplo:
+
+- `/reader?episodeId=mg197350`
+
+Se o manifesto ainda não existir, o reader mostra uma mensagem objetiva pedindo para rodar o probe antes.
+
+## Saídas esperadas do probe real
+
+Ao rodar:
+
+```bash
+npm run probe:viewer
+```
+
+as saídas esperadas são:
+
+- `probe-report.json`
+- `public/manifests/<episodeId>.json`
+
+O manifesto inclui:
+
+- `source`
+- `targetUrl`
+- `comicId`
+- `episodeId`
+- `playerType`
+- `frameCount`
+- `capturedCount`
+- `isComplete`
+- `units[]`
+
+## Critério de avanço de fase
+
+O projeto só deve avançar para proxy, OCR e tradução depois que o reader estiver conseguindo:
+
+- abrir um manifesto real
+- renderizar as unidades capturadas
+- indicar se a captura está completa ou parcial
+- operar sem placeholder
