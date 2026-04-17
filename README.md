@@ -8,6 +8,7 @@ Base limpa para o recomeço do MangaX 2.0.
 - TypeScript
 - Tailwind CSS
 - Vercel
+- Playwright (para a fase real de probe do viewer)
 
 ## Objetivo desta fase
 
@@ -46,6 +47,21 @@ Para a URL de teste `https://sp.manga.nicovideo.jp/watch/mg197350`, o backend j�
 - `player_type = scroll`
 - `frameCount = 42`
 - alguns materiais do CDN aparecem no HTML inicial, mas **não representam a contagem real de leitura**
+
+## Host map já validado
+
+### Confirmado
+
+- `sp.manga.nicovideo.jp` = entrada do viewer
+- `manga.nicovideo.jp` = host relacionado ao manga
+- `nicomanga.jp` = domínio ativo com subdomínios reais
+
+### Ainda não confirmado por enumeração DNS
+
+- `api.nicomanga.jp`
+- `drm.cdn.nicomanga.jp`
+
+Esses hosts podem aparecer no runtime, mas não devem mais ser tratados como verdade apenas por hipótese.
 
 ## Conclusão desta etapa
 
@@ -92,6 +108,32 @@ Exemplo:
 - `/reader?episodeId=mg197350`
 
 Se o manifesto ainda não existir, o reader mostra uma mensagem objetiva pedindo para rodar o probe antes.
+
+## Como rodar o probe real
+
+Instale dependências:
+
+```bash
+npm install
+```
+
+Instale o Chromium do Playwright:
+
+```bash
+npm run probe:viewer:install
+```
+
+Execute o probe:
+
+```bash
+npm run probe:viewer
+```
+
+Também é possível passar uma URL-alvo:
+
+```bash
+node tools/viewer-network-probe.mjs https://sp.manga.nicovideo.jp/watch/mg197350
+```
 
 ## Saídas esperadas do probe real
 
