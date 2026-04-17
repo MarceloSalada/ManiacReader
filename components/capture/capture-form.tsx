@@ -10,6 +10,9 @@ type CaptureResponse = {
   title: string | null;
   description: string | null;
   signals: string[];
+  scriptSnippetCount: number;
+  scriptSnippets: string[];
+  endpointCandidates: string[];
   notes: string[];
 };
 
@@ -91,6 +94,31 @@ export function CaptureForm() {
             </ul>
           ) : (
             <p className="mt-2">Nenhum sinal detectado ainda.</p>
+          )}
+
+          <p className="mt-4 font-semibold text-white">Scripts relevantes</p>
+          <p className="mt-2">{result.scriptSnippetCount}</p>
+          {result.scriptSnippets.length > 0 ? (
+            <div className="mt-3 space-y-3 text-xs leading-5 text-slate-300">
+              {result.scriptSnippets.map((snippet, index) => (
+                <div key={`${index}-${snippet}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                  {snippet}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2">Nenhum script relevante isolado ainda.</p>
+          )}
+
+          <p className="mt-4 font-semibold text-white">Possíveis endpoints</p>
+          {result.endpointCandidates.length > 0 ? (
+            <div className="mt-2 space-y-2 break-all text-xs leading-5 text-slate-300">
+              {result.endpointCandidates.map((endpoint) => (
+                <p key={endpoint}>{endpoint}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2">Nenhum endpoint candidato detectado ainda.</p>
           )}
 
           <p className="mt-4 font-semibold text-white">Notas</p>
