@@ -30,6 +30,157 @@ function classifyResponse(url, contentType) {
   return 'other';
 }
 
+function decodeHtmlEntities(value) {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function extractEpisodeId(targetUrl) {
+  const match = targetUrl.match(/\/watch\/(mg\d+)/i) ?? targetUrl.match(/\/episode\/([^/?#]+)/i);
+  return match?.[1] ?? null;
+}
+
+function extractComicId(html) {
+  const decoded = decodeHtmlEntities(html);
+  const match =
+    decoded.match(/https:\/\/manga\.nicovideo\.jp\/comic\/(\d+)/i) ?? decoded.match(/"id":(\d+)/i);
+  return match?.[1] ?? null;
+}
+
+function extractContentSnippet(html) {
+  const decoded = decodeHtmlEntities(html).replace(/\\\//g, '/');
+  const directMarkers = ['"content":{', '\\"content\\":{'];
+
+  for (const marker of directMarkers) {
+    const index = decoded.indexOf(marker);
+    if (index !== -1) {
+      return decoded.slice(index, index + 4200).replace(/\s+/g, ' ');
+    }
+  }
+
+  return null;
+}
+
+function extractFrameCount(snippet) {
+  if (!snippet) {
+    return null;
+  }
+
+  const patterns = [/counter\\?":\\?\{[^}]*\\?"frame\\?":(\d+)/i, /\\?"frame\\?":(\d+)/i];
+
+  for (const pattern of patterns) {
+    const match = snippet.match(pattern);
+    if (match?.[1]) {
+      return Number(match[1]);
+    }
+  }
+
+  return null;
+}
+
+function extractPlayerType(snippet) {
+  if (!snippet) {
+    return null;
+  }
+
+  const patterns = [/\\?"player_type\\?":\\?"([^\\"]+)\\?"/i, /player_type":"([^"]+)"/i];
+
+  for (const pattern of patterns) {
+    const match = snippet.match(pattern);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+function extractFilenameFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    return segments.at(-1) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function extractNumericOrder(filename) {
+  if (!filename) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const match = filename.match(/(\d+)/);
+  return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+}
+
+function buildManifest({ targetUrl, html, responses }) {
+  const contentSnippet = extractContentSnippet(html);
+  const frameCount = extractFrameCount(contentSnippet);
+  const playerType = extractPlayerType(contentSnippet);
+  const comicId = extractComicId(html);
+  const episodeId = extractEpisodeId(targetUrl);
+
+  const orderedCandidates = [];
+  const seenUrls = new Set();
+
+  responses.forEach((response, captureIndex) => {
+    if (response.kind !== 'drm-image' && response.kind !== 'image') {
+      return;
+    }
+
+    if (seenUrls.has(response.url)) {
+      return;
+    }
+
+    seenUrls.add(response.url);
+
+    const filename = extractFilenameFromUrl(response.url);
+
+    orderedCandidates.push({
+      captureIndex,
+      numericOrder: extractNumericOrder(filename),
+      url: response.url,
+      filename,
+      kind: response.kind === 'drm-image' ? 'drm-image' : 'image',
+    });
+  });
+
+  orderedCandidates.sort((left, right) => {
+    if (left.numericOrder !== right.numericOrder) {
+      return left.numericOrder - right.numericOrder;
+    }
+
+    return left.captureIndex - right.captureIndex;
+  });
+
+  const units = orderedCandidates.map((candidate, index) => ({
+    index: index + 1,
+    url: candidate.url,
+    filename: candidate.filename,
+    kind: candidate.kind,
+  }));
+
+  const capturedCount = units.length;
+  const isComplete = typeof frameCount === 'number' ? capturedCount === frameCount : false;
+
+  return {
+    source: 'Nico Nico',
+    targetUrl,
+    comicId,
+    episodeId,
+    playerType,
+    frameCount,
+    capturedCount,
+    isComplete,
+    units,
+  };
+}
+
 async function loadPlaywright() {
   try {
     return await import('playwright');
@@ -272,6 +423,9 @@ async function runProbe(targetUrl) {
     await page.waitForTimeout(2500);
     await performProgressiveScroll(page);
 
+    const finalHtml = await page.content();
+    const manifest = buildManifest({ targetUrl, html: finalHtml, responses });
+
     const report = {
       targetUrl,
       timestamp: new Date().toISOString(),
@@ -282,11 +436,30 @@ async function runProbe(targetUrl) {
       requests,
       responses,
       runtimeEvents,
+      manifestSummary: {
+        episodeId: manifest.episodeId,
+        comicId: manifest.comicId,
+        playerType: manifest.playerType,
+        frameCount: manifest.frameCount,
+        capturedCount: manifest.capturedCount,
+        isComplete: manifest.isComplete,
+      },
     };
 
-    const outputPath = path.resolve(process.cwd(), 'probe-report.json');
-    fs.writeFileSync(outputPath, JSON.stringify(report, null, 2), 'utf-8');
-    console.log(`[Probe] Relatório gerado: ${outputPath}`);
+    const reportPath = path.resolve(process.cwd(), 'probe-report.json');
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
+
+    const episodeId = manifest.episodeId ?? 'unknown-episode';
+    const manifestDir = path.resolve(process.cwd(), 'public', 'manifests');
+    fs.mkdirSync(manifestDir, { recursive: true });
+    const manifestPath = path.join(manifestDir, `${episodeId}.json`);
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+    console.log(`[Probe] Relatório gerado: ${reportPath}`);
+    console.log(`[Probe] Manifesto gerado: ${manifestPath}`);
+    console.log(
+      `[Probe] Captura consolidada: ${manifest.capturedCount} unidade(s) / ${manifest.frameCount ?? 'frameCount não detectado'}`,
+    );
   } catch (error) {
     console.error('[Probe] Erro durante a captura:', error);
     process.exitCode = 1;
