@@ -16,7 +16,9 @@ type CaptureResponse = {
   comicId: string | null;
   episodeId: string | null;
   materialCandidates: string[];
-  estimatedPageCount: number;
+  candidateMaterialCount: number;
+  frameCount: number | null;
+  playerType: string | null;
   contentSnippet: string | null;
   pageFieldSignals: string[];
   notes: string[];
@@ -94,7 +96,9 @@ export function CaptureForm() {
           <p className="mt-4 font-semibold text-white">IDs detectados</p>
           <p><span className="font-semibold text-white">Comic ID:</span> {result.comicId ?? 'Não detectado'}</p>
           <p><span className="font-semibold text-white">Episode ID:</span> {result.episodeId ?? 'Não detectado'}</p>
-          <p><span className="font-semibold text-white">Estimativa inicial de páginas:</span> {result.estimatedPageCount}</p>
+          <p><span className="font-semibold text-white">Player type:</span> {result.playerType ?? 'Não detectado'}</p>
+          <p><span className="font-semibold text-white">Frame count:</span> {result.frameCount ?? 'Não detectado'}</p>
+          <p><span className="font-semibold text-white">Materiais candidatos iniciais:</span> {result.candidateMaterialCount}</p>
 
           <p className="mt-4 font-semibold text-white">Sinais detectados</p>
           {result.signals.length > 0 ? (
