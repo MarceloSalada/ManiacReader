@@ -10,6 +10,9 @@ export type CaptureChapterResult = {
   title: string | null;
   description: string | null;
   signals: string[];
+  scriptSnippetCount: number;
+  scriptSnippets: string[];
+  endpointCandidates: string[];
   notes: string[];
 };
 
@@ -38,6 +41,31 @@ function extractMetaContent(html: string, propertyName: string) {
   }
 
   return null;
+}
+
+function extractScriptSnippets(html: string, maxCount = 8) {
+  const matches = Array.from(html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi));
+  const relevant = matches
+    .map((match) => match[1]?.trim() ?? '')
+    .filter(Boolean)
+    .filter((script) => /episode|viewer|canvas|image|img|comic|manga|watch|api|json/i.test(script))
+    .slice(0, maxCount)
+    .map((script) => script.replace(/\s+/g, ' ').slice(0, 500));
+
+  return {
+    total: relevant.length,
+    snippets: relevant,
+  };
+}
+
+function extractEndpointCandidates(html: string, maxCount = 12) {
+  const patterns = [
+    /https?:\/\/[^"'\s]+(?:api|viewer|episode|episodes|image|images|comic|manga|json)[^"'\s]*/gi,
+    /\/[^"'\s]+(?:api|viewer|episode|episodes|image|images|comic|manga|json)[^"'\s]*/gi,
+  ];
+
+  const found = patterns.flatMap((pattern) => Array.from(html.matchAll(pattern)).map((match) => match[0]));
+  return Array.from(new Set(found)).slice(0, maxCount);
 }
 
 export function normalizeNicoNicoUrl(rawUrl: string) {
@@ -126,6 +154,9 @@ export async function startNicoNicoCapture(
       title: null,
       description: null,
       signals: [],
+      scriptSnippetCount: 0,
+      scriptSnippets: [],
+      endpointCandidates: [],
       notes: [
         'URL inválida para a fonte alvo atual.',
         'Use uma URL do seiga.nicovideo.jp ou do sp.manga.nicovideo.jp.',
@@ -146,6 +177,8 @@ export async function startNicoNicoCapture(
   const description =
     extractMetaContent(html, 'og:description') ?? extractMetaContent(html, 'description');
   const signals = detectNicoNicoSignals(html);
+  const { total: scriptSnippetCount, snippets: scriptSnippets } = extractScriptSnippets(html);
+  const endpointCandidates = extractEndpointCandidates(html);
 
   return {
     source: 'Nico Nico',
@@ -155,10 +188,14 @@ export async function startNicoNicoCapture(
     title,
     description,
     signals,
+    scriptSnippetCount,
+    scriptSnippets,
+    endpointCandidates,
     notes: [
       'A URL foi validada contra a fonte alvo inicial.',
       'O backend já buscou o HTML da página do capítulo.',
-      'Próxima etapa: localizar o viewer e o payload real das páginas.',
+      'Scripts relevantes e possíveis endpoints do viewer foram extraídos.',
+      'Próxima etapa: localizar o payload real das páginas.',
     ],
   };
 }
