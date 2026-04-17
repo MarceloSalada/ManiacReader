@@ -51,7 +51,7 @@ export function CaptureForm() {
     <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
       <h2 className="text-2xl font-semibold text-white">Importar capítulo</h2>
       <p className="mt-3 text-sm leading-6 text-slate-300">
-        Cole a URL de um capítulo do Nico Nico Seiga para iniciar a inspeção experimental do backend.
+        Cole a URL de um capítulo do Nico Nico Seiga ou Nico Nico Manga para iniciar a inspeção experimental do backend.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -59,7 +59,7 @@ export function CaptureForm() {
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           rows={4}
-          placeholder="https://seiga.nicovideo.jp/watch/..."
+          placeholder="https://sp.manga.nicovideo.jp/episode/..."
           className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-emerald-400/40"
         />
 
