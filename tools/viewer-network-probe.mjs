@@ -249,19 +249,49 @@ async function performProgressiveScroll(page) {
   await page.waitForTimeout(5000);
 }
 
+async function gotoWithRetry(page, targetUrl) {
+  try {
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    return;
+  } catch (error) {
+    console.warn('[Probe] Primeira tentativa de navegação falhou. Recriando página e tentando de novo...');
+    if (error instanceof Error) {
+      console.warn(`[Probe] Motivo da primeira falha: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
 async function runProbe(targetUrl) {
   console.log(`[Probe] Iniciando captura: ${targetUrl}`);
 
   const { chromium } = await loadPlaywright();
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+    ],
+  });
+
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
     viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
   });
 
-  const page = await context.newPage();
+  let page = await context.newPage();
   const requests = [];
   const responses = [];
   const runtimeEvents = [];
@@ -447,7 +477,7 @@ async function runProbe(targetUrl) {
   });
 
   try {
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await gotoWithRetry(page, targetUrl);
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
 
     await page.waitForTimeout(2500);
