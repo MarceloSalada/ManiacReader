@@ -17,6 +17,8 @@ export type CaptureChapterResult = {
   episodeId: string | null;
   materialCandidates: string[];
   estimatedPageCount: number;
+  contentSnippet: string | null;
+  pageFieldSignals: string[];
   notes: string[];
 };
 
@@ -74,7 +76,8 @@ function extractEndpointCandidates(html: string, maxCount = 16) {
 
 function extractIds(html: string) {
   const decoded = decodeHtmlEntities(html);
-  const comicMatch = decoded.match(/https:\/\/manga\.nicovideo\.jp\/comic\/(\d+)/i) ?? decoded.match(/"id":(\d+)/i);
+  const comicMatch =
+    decoded.match(/https:\/\/manga\.nicovideo\.jp\/comic\/(\d+)/i) ?? decoded.match(/"id":(\d+)/i);
   const episodeMatch = decoded.match(/\["episodeId","([^"]+)"/i) ?? decoded.match(/watch\/(mg\d+)/i);
 
   return {
@@ -88,6 +91,36 @@ function extractMaterialCandidates(html: string, maxCount = 120) {
   const pattern = /https:\/\/deliver\.cdn\.nicomanga\.jp\/material\/[^"'\s,\\]+/gi;
   const found = Array.from(decoded.matchAll(pattern)).map((match) => match[0].replace(/\\$/g, ''));
   return Array.from(new Set(found)).slice(0, maxCount);
+}
+
+function extractContentSnippet(html: string) {
+  const decoded = decodeHtmlEntities(html).replace(/\\\//g, '/');
+  const marker = '"content":{';
+  const index = decoded.indexOf(marker);
+
+  if (index === -1) {
+    return null;
+  }
+
+  return decoded.slice(index, index + 2200).replace(/\s+/g, ' ');
+}
+
+function extractPageFieldSignals(snippet: string | null) {
+  if (!snippet) {
+    return [];
+  }
+
+  const fieldPatterns: Array<[string, RegExp]> = [
+    ['page', /"page"/i],
+    ['pages', /"pages"/i],
+    ['pageCount', /pageCount|page_count|totalPage|total_page/i],
+    ['image', /"image"|"images"|imageUrl|image_url/i],
+    ['material', /"material"|materials/i],
+    ['viewer', /viewer/i],
+    ['canvas', /canvas/i],
+  ];
+
+  return fieldPatterns.filter(([, pattern]) => pattern.test(snippet)).map(([label]) => label);
 }
 
 export function normalizeNicoNicoUrl(rawUrl: string) {
@@ -187,6 +220,8 @@ export async function startNicoNicoCapture(
       episodeId: null,
       materialCandidates: [],
       estimatedPageCount: 0,
+      contentSnippet: null,
+      pageFieldSignals: [],
       notes: [
         'URL inválida para a fonte alvo atual.',
         'Use uma URL do seiga.nicovideo.jp ou do sp.manga.nicovideo.jp.',
@@ -212,6 +247,8 @@ export async function startNicoNicoCapture(
   const { comicId, episodeId } = extractIds(html);
   const materialCandidates = extractMaterialCandidates(html);
   const estimatedPageCount = materialCandidates.length;
+  const contentSnippet = extractContentSnippet(html);
+  const pageFieldSignals = extractPageFieldSignals(contentSnippet);
 
   return {
     source: 'Nico Nico',
@@ -228,11 +265,14 @@ export async function startNicoNicoCapture(
     episodeId,
     materialCandidates,
     estimatedPageCount,
+    contentSnippet,
+    pageFieldSignals,
     notes: [
       'A URL foi validada contra a fonte alvo inicial.',
       'O backend já buscou o HTML da página do capítulo.',
       'Scripts relevantes e possíveis endpoints do viewer foram extraídos.',
       'Materiais do CDN foram separados como candidatos de páginas do episódio.',
+      'Foi extraído um trecho maior do bloco content para procurar campos de página.',
       'Próxima etapa: validar se esses materiais representam o episódio inteiro e em qual ordem.',
     ],
   };
