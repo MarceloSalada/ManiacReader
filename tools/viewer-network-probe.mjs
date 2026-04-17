@@ -149,10 +149,10 @@ function isAcceptedManifestAsset(response, filename) {
 }
 
 function buildManifest({ targetUrl, html, responses }) {
-  const contentSnippet = extractContentSnippet(html);
+  const contentSnippet = extractContentSnippet(html ?? '');
   const frameCount = extractFrameCount(contentSnippet);
   const playerType = extractPlayerType(contentSnippet);
-  const comicId = extractComicId(html);
+  const comicId = extractComicId(html ?? '');
   const episodeId = extractEpisodeId(targetUrl);
 
   const orderedCandidates = [];
@@ -211,6 +211,41 @@ function buildManifest({ targetUrl, html, responses }) {
   };
 }
 
+function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html }) {
+  const manifest = buildManifest({ targetUrl, html, responses });
+
+  const report = {
+    targetUrl,
+    timestamp: new Date().toISOString(),
+    domainsOfInterest: DOMAINS_OF_INTEREST,
+    requestCount: requests.length,
+    responseCount: responses.length,
+    runtimeEventCount: runtimeEvents.length,
+    requests,
+    responses,
+    runtimeEvents,
+    manifestSummary: {
+      episodeId: manifest.episodeId,
+      comicId: manifest.comicId,
+      playerType: manifest.playerType,
+      frameCount: manifest.frameCount,
+      capturedCount: manifest.capturedCount,
+      isComplete: manifest.isComplete,
+    },
+  };
+
+  const reportPath = path.resolve(process.cwd(), 'probe-report.json');
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
+
+  const episodeId = manifest.episodeId ?? 'unknown-episode';
+  const manifestDir = path.resolve(process.cwd(), 'public', 'manifests');
+  fs.mkdirSync(manifestDir, { recursive: true });
+  const manifestPath = path.join(manifestDir, `${episodeId}.json`);
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+  return { manifest, reportPath, manifestPath };
+}
+
 async function loadPlaywright() {
   try {
     return await import('playwright');
@@ -224,25 +259,24 @@ async function loadPlaywright() {
 async function performProgressiveScroll(page) {
   console.log('[Probe] Iniciando rolagem progressiva longa...');
 
-  for (let cycle = 0; cycle < 5; cycle += 1) {
-    for (let step = 0; step < 8; step += 1) {
-      await page.mouse.wheel(0, 1400);
-      await page.waitForTimeout(900);
+  for (let cycle = 0; cycle < 4; cycle += 1) {
+    for (let step = 0; step < 6; step += 1) {
+      await page.evaluate((distance) => {
+        window.scrollBy(0, distance);
+      }, 500);
+      await page.waitForTimeout(1200);
     }
 
     await page.evaluate(() => {
-      window.scrollBy({ top: window.innerHeight * 1.2, behavior: 'instant' });
+      window.scrollBy(0, Math.floor(window.innerHeight * 0.75));
     });
-    await page.waitForTimeout(1200);
-
-    await page.keyboard.press('PageDown').catch(() => null);
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1500);
   }
 
   await page.evaluate(async () => {
-    for (let index = 0; index < 12; index += 1) {
-      window.scrollBy(0, Math.floor(window.innerHeight * 0.9));
-      await new Promise((resolve) => setTimeout(resolve, 800));
+    for (let index = 0; index < 8; index += 1) {
+      window.scrollBy(0, Math.floor(window.innerHeight * 0.65));
+      await new Promise((resolve) => setTimeout(resolve, 1200));
     }
   });
 
@@ -254,7 +288,7 @@ async function gotoWithRetry(page, targetUrl) {
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     return;
   } catch (error) {
-    console.warn('[Probe] Primeira tentativa de navegação falhou. Recriando página e tentando de novo...');
+    console.warn('[Probe] Primeira tentativa de navegação falhou.');
     if (error instanceof Error) {
       console.warn(`[Probe] Motivo da primeira falha: ${error.message}`);
     }
@@ -291,7 +325,7 @@ async function runProbe(targetUrl) {
     hasTouch: true,
   });
 
-  let page = await context.newPage();
+  const page = await context.newPage();
   const requests = [];
   const responses = [];
   const runtimeEvents = [];
@@ -476,44 +510,33 @@ async function runProbe(targetUrl) {
     }
   });
 
+  let lastKnownHtml = '';
+
   try {
     await gotoWithRetry(page, targetUrl);
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
-
     await page.waitForTimeout(2500);
-    await performProgressiveScroll(page);
 
-    const finalHtml = await page.content();
-    const manifest = buildManifest({ targetUrl, html: finalHtml, responses });
+    lastKnownHtml = await page.content().catch(() => '');
 
-    const report = {
+    try {
+      await performProgressiveScroll(page);
+    } catch (scrollError) {
+      console.warn('[Probe] A rolagem falhou, mas a captura parcial será salva.');
+      if (scrollError instanceof Error) {
+        console.warn(`[Probe] Motivo da falha na rolagem: ${scrollError.message}`);
+      }
+    }
+
+    lastKnownHtml = await page.content().catch(() => lastKnownHtml);
+
+    const { manifest, reportPath, manifestPath } = persistOutputs({
       targetUrl,
-      timestamp: new Date().toISOString(),
-      domainsOfInterest: DOMAINS_OF_INTEREST,
-      requestCount: requests.length,
-      responseCount: responses.length,
-      runtimeEventCount: runtimeEvents.length,
       requests,
       responses,
       runtimeEvents,
-      manifestSummary: {
-        episodeId: manifest.episodeId,
-        comicId: manifest.comicId,
-        playerType: manifest.playerType,
-        frameCount: manifest.frameCount,
-        capturedCount: manifest.capturedCount,
-        isComplete: manifest.isComplete,
-      },
-    };
-
-    const reportPath = path.resolve(process.cwd(), 'probe-report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
-
-    const episodeId = manifest.episodeId ?? 'unknown-episode';
-    const manifestDir = path.resolve(process.cwd(), 'public', 'manifests');
-    fs.mkdirSync(manifestDir, { recursive: true });
-    const manifestPath = path.join(manifestDir, `${episodeId}.json`);
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+      html: lastKnownHtml,
+    });
 
     console.log(`[Probe] Relatório gerado: ${reportPath}`);
     console.log(`[Probe] Manifesto gerado: ${manifestPath}`);
@@ -522,6 +545,22 @@ async function runProbe(targetUrl) {
     );
   } catch (error) {
     console.error('[Probe] Erro durante a captura:', error);
+
+    try {
+      const { manifest, reportPath, manifestPath } = persistOutputs({
+        targetUrl,
+        requests,
+        responses,
+        runtimeEvents,
+        html: lastKnownHtml,
+      });
+      console.log(`[Probe] Saída parcial salva em erro: ${reportPath}`);
+      console.log(`[Probe] Manifesto parcial salvo em erro: ${manifestPath}`);
+      console.log(`[Probe] Captura parcial disponível: ${manifest.capturedCount} unidade(s).`);
+    } catch (persistError) {
+      console.error('[Probe] Também falhou ao salvar a saída parcial:', persistError);
+    }
+
     process.exitCode = 1;
   } finally {
     await browser.close();
