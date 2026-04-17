@@ -1,39 +1,97 @@
-import type { MangaChapter } from '@/lib/reader/types';
+'use client';
 
-const sampleChapter: MangaChapter = {
-  id: 'sample-chapter',
-  title: 'Capítulo de exemplo',
-  pages: [
-    {
-      id: 'sample-page-1',
-      imageUrl: 'https://placehold.co/1200x1800/0f172a/e2e8f0?text=Pagina+1',
-      alt: 'Página de exemplo 1',
-    },
-  ],
+import { useEffect, useState } from 'react';
+
+import { ChapterView } from '@/components/reader/chapter-view';
+import { loadManifest } from '@/lib/reader/load-manifest';
+import type { ChapterManifest } from '@/lib/reader/types';
+
+type ReaderShellProps = {
+  episodeId?: string;
 };
 
-export function ReaderShell() {
-  const page = sampleChapter.pages[0];
+const DEFAULT_EPISODE_ID = 'mg197350';
 
-  return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">reader</p>
-        <h1 className="mt-2 text-3xl font-bold text-white">{sampleChapter.title}</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-300">
-          Este é o shell inicial do leitor. Aqui vamos validar páginas limpas, navegação e regiões antes de ligar OCR e tradução.
-        </p>
+export function ReaderShell({ episodeId = DEFAULT_EPISODE_ID }: ReaderShellProps) {
+  const [manifest, setManifest] = useState<ChapterManifest | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function run() {
+      setIsLoading(true);
+      setError(null);
+      setManifest(null);
+
+      try {
+        const loadedManifest = await loadManifest(episodeId);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!loadedManifest) {
+          setError(
+            `Manifesto não encontrado para ${episodeId}. Rode o probe e gere public/manifests/${episodeId}.json antes de abrir este reader.`,
+          );
+          return;
+        }
+
+        if (loadedManifest.units.length === 0) {
+          setError(
+            `O manifesto ${episodeId} foi encontrado, mas ainda não tem unidades de leitura utilizáveis.`,
+          );
+          return;
+        }
+
+        setManifest(loadedManifest);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setError('Falha ao carregar o manifesto do capítulo.');
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void run();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [episodeId]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm leading-6 text-slate-300">
+        Carregando manifesto do episódio <span className="font-semibold text-white">{episodeId}</span>...
       </div>
+    );
+  }
 
-      <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4 shadow-2xl shadow-black/20">
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-300">
-          Área inicial do reader pronta para conectar capítulos capturados no backend.
-        </div>
-
-        <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-slate-900 p-3">
-          <img src={page.imageUrl} alt={page.alt} className="h-auto w-full rounded-xl object-contain" />
-        </div>
+  if (error) {
+    return (
+      <div className="space-y-4 rounded-3xl border border-red-400/20 bg-red-400/5 p-6">
+        <p className="text-xs uppercase tracking-[0.2em] text-red-300">reader</p>
+        <h1 className="text-2xl font-bold text-white">Manifesto indisponível</h1>
+        <p className="text-sm leading-6 text-slate-300">{error}</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (!manifest) {
+    return (
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm leading-6 text-slate-300">
+        Nenhum manifesto carregado.
+      </div>
+    );
+  }
+
+  return <ChapterView manifest={manifest} />;
 }
