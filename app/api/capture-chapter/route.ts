@@ -11,7 +11,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A URL do capítulo é obrigatória.' }, { status: 400 });
     }
 
-    const result = startNicoNicoCapture({ url: requestedUrl });
+    const result = await startNicoNicoCapture({ url: requestedUrl });
+
+    if (result.status === 'invalid_url') {
+      return NextResponse.json(result, { status: 400 });
+    }
+
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: 'Falha ao iniciar a captura.' }, { status: 500 });
