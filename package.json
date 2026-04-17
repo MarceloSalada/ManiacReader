@@ -9,7 +9,8 @@
     "lint": "next lint",
     "probe:viewer:stub": "node tools/viewer-network-probe.example.mjs",
     "probe:viewer": "node tools/viewer-network-probe.mjs",
-    "probe:viewer:install": "npx playwright install chromium"
+    "probe:viewer:install": "npx playwright install chromium",
+    "probe:summarize": "node tools/summarize-probe-report.mjs"
   },
   "dependencies": {
     "next": "15.3.6",
