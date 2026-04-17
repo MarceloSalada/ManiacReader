@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 type CaptureResponse = {
@@ -93,6 +94,21 @@ export function CaptureForm() {
           <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
             <p><span className="font-semibold text-white">Diagnóstico final desta fase:</span> {result.diagnosisSummary}</p>
             <p className="mt-2"><span className="font-semibold text-white">Próximo passo obrigatório:</span> {result.nextRequiredStep}</p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/probe"
+                className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300/40 hover:bg-emerald-400/15"
+              >
+                Ir para o probe
+              </Link>
+              <a
+                href="/api/viewer-probe-stub"
+                className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-slate-900"
+              >
+                Abrir JSON do probe
+              </a>
+            </div>
           </div>
 
           <p className="mt-4"><span className="font-semibold text-white">Fonte:</span> {result.source}</p>
