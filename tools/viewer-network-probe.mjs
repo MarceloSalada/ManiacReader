@@ -11,9 +11,12 @@ const DOMAINS_OF_INTEREST = [
   'deliver.cdn.nicomanga.jp',
   'drm.cdn.nicomanga.jp',
   'res.ads.nicovideo.jp',
+  'api.nicomanga.jp',
 ];
 const MAX_STAGNANT_CYCLES = 4;
 const MAX_CAPTURE_CYCLES = 18;
+const CANDIDATE_URL_PATTERN = /manifest|content|episode|viewer|frame|page|image|drm|api/i;
+const PAYLOAD_HINT_PATTERN = /6200950|6200951|drm\.cdn\.nicomanga\.jp|frame|page|viewer|episode|image|content/i;
 
 function isInterestingUrl(url) {
   return DOMAINS_OF_INTEREST.some((domain) => url.includes(domain));
@@ -213,8 +216,54 @@ function buildManifest({ targetUrl, html, responses }) {
   };
 }
 
+function buildCandidateFindings(responses) {
+  const findings = [];
+  const seen = new Set();
+
+  responses.forEach((response) => {
+    const candidateByKind = response.kind === 'json' || response.kind === 'api-or-viewer';
+    const candidateByUrl = CANDIDATE_URL_PATTERN.test(response.url);
+    const candidateByPayload = typeof response.payloadExcerpt === 'string' && PAYLOAD_HINT_PATTERN.test(response.payloadExcerpt);
+    const candidateByKeys = Array.isArray(response.jsonKeys)
+      && response.jsonKeys.some((key) => CANDIDATE_URL_PATTERN.test(String(key)));
+
+    if (!(candidateByKind || candidateByUrl || candidateByPayload || candidateByKeys)) {
+      return;
+    }
+
+    if (seen.has(response.url)) {
+      return;
+    }
+    seen.add(response.url);
+
+    findings.push({
+      url: response.url,
+      kind: response.kind,
+      status: response.status,
+      contentType: response.contentType,
+      jsonKeys: response.jsonKeys,
+      payloadExcerpt: response.payloadExcerpt,
+      reasons: [
+        candidateByKind ? 'kind' : null,
+        candidateByUrl ? 'url-pattern' : null,
+        candidateByPayload ? 'payload-hint' : null,
+        candidateByKeys ? 'json-keys' : null,
+      ].filter(Boolean),
+    });
+  });
+
+  findings.sort((left, right) => {
+    const leftScore = (left.reasons?.length ?? 0) + (left.kind === 'json' ? 2 : 0);
+    const rightScore = (right.reasons?.length ?? 0) + (right.kind === 'json' ? 2 : 0);
+    return rightScore - leftScore;
+  });
+
+  return findings.slice(0, 20);
+}
+
 function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html }) {
   const manifest = buildManifest({ targetUrl, html, responses });
+  const candidateFindings = buildCandidateFindings(responses);
 
   const report = {
     targetUrl,
@@ -226,6 +275,7 @@ function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html })
     requests,
     responses,
     runtimeEvents,
+    candidateFindings,
     manifestSummary: {
       episodeId: manifest.episodeId,
       comicId: manifest.comicId,
@@ -245,7 +295,7 @@ function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html })
   const manifestPath = path.join(manifestDir, `${episodeId}.json`);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 
-  return { manifest, reportPath, manifestPath };
+  return { manifest, reportPath, manifestPath, candidateFindings };
 }
 
 function getAcceptedCaptureCount(responses) {
@@ -387,7 +437,7 @@ async function runProbe(targetUrl) {
 
   const persistPartial = async () => {
     lastKnownHtml = await page.content().catch(() => lastKnownHtml);
-    const { manifest, reportPath, manifestPath } = persistOutputs({
+    const { manifest, reportPath, manifestPath, candidateFindings } = persistOutputs({
       targetUrl,
       requests,
       responses,
@@ -398,7 +448,10 @@ async function runProbe(targetUrl) {
       detectedFrameCount = manifest.frameCount;
     }
     console.log(`[Probe] Persistência parcial: ${manifest.capturedCount}/${manifest.frameCount ?? 'desconhecido'} -> ${manifestPath}`);
-    return { manifest, reportPath, manifestPath };
+    if (candidateFindings.length > 0) {
+      console.log(`[Probe] Candidatos de índice detectados: ${candidateFindings.length}`);
+    }
+    return { manifest, reportPath, manifestPath, candidateFindings };
   };
 
   await page.exposeFunction('reportProbeRuntimeEvent', (event) => {
@@ -608,7 +661,7 @@ async function runProbe(targetUrl) {
 
     lastKnownHtml = await page.content().catch(() => lastKnownHtml);
 
-    const { manifest, reportPath, manifestPath } = persistOutputs({
+    const { manifest, reportPath, manifestPath, candidateFindings } = persistOutputs({
       targetUrl,
       requests,
       responses,
@@ -619,11 +672,12 @@ async function runProbe(targetUrl) {
     console.log(`[Probe] Relatório gerado: ${reportPath}`);
     console.log(`[Probe] Manifesto gerado: ${manifestPath}`);
     console.log(`[Probe] Captura consolidada: ${manifest.capturedCount} unidade(s) / ${manifest.frameCount ?? 'frameCount não detectado'}`);
+    console.log(`[Probe] Endpoints candidatos destacados: ${candidateFindings.length}`);
   } catch (error) {
     console.error('[Probe] Erro durante a captura:', error);
 
     try {
-      const { manifest, reportPath, manifestPath } = persistOutputs({
+      const { manifest, reportPath, manifestPath, candidateFindings } = persistOutputs({
         targetUrl,
         requests,
         responses,
@@ -633,6 +687,7 @@ async function runProbe(targetUrl) {
       console.log(`[Probe] Saída parcial salva em erro: ${reportPath}`);
       console.log(`[Probe] Manifesto parcial salvo em erro: ${manifestPath}`);
       console.log(`[Probe] Captura parcial disponível: ${manifest.capturedCount} unidade(s).`);
+      console.log(`[Probe] Endpoints candidatos destacados em erro: ${candidateFindings.length}`);
     } catch (persistError) {
       console.error('[Probe] Também falhou ao salvar a saída parcial:', persistError);
     }
