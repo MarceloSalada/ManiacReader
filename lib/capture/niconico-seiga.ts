@@ -3,7 +3,7 @@ export type CaptureChapterInput = {
 };
 
 export type CaptureChapterResult = {
-  source: 'Nico Nico Seiga';
+  source: 'Nico Nico';
   requestedUrl: string;
   normalizedUrl: string;
   status: 'invalid_url' | 'inspected' | 'pending_parser';
@@ -61,10 +61,22 @@ export function isNicoNicoSeigaUrl(rawUrl: string) {
   try {
     const url = new URL(normalizedUrl);
     const isExpectedHost =
-      url.hostname === 'seiga.nicovideo.jp' || url.hostname === 'sp.seiga.nicovideo.jp';
-    const isExpectedPath = url.pathname.startsWith('/watch/') || url.pathname.startsWith('/comic/');
+      url.hostname === 'seiga.nicovideo.jp' ||
+      url.hostname === 'sp.seiga.nicovideo.jp' ||
+      url.hostname === 'sp.manga.nicovideo.jp';
 
-    return isExpectedHost && isExpectedPath;
+    const isLegacyPath = url.pathname.startsWith('/watch/') || url.pathname.startsWith('/comic/');
+    const isMobileMangaPath =
+      url.pathname.startsWith('/title/') ||
+      url.pathname.startsWith('/episode/') ||
+      url.pathname.startsWith('/watch/') ||
+      url.pathname.startsWith('/comic/');
+
+    if (url.hostname === 'sp.manga.nicovideo.jp') {
+      return isMobileMangaPath;
+    }
+
+    return isLegacyPath;
   } catch {
     return false;
   }
@@ -89,8 +101,12 @@ export function detectNicoNicoSignals(html: string) {
     signals.push('Referências a imagem detectadas');
   }
 
-  if (/episode|chapter|comic|watch/i.test(html)) {
+  if (/episode|chapter|comic|watch|title/i.test(html)) {
     signals.push('Referências a capítulo/viewer detectadas');
+  }
+
+  if (/manga\.nicovideo\.jp/i.test(html)) {
+    signals.push('Referências ao domínio manga.nicovideo.jp detectadas');
   }
 
   return signals;
@@ -103,7 +119,7 @@ export async function startNicoNicoCapture(
 
   if (!isNicoNicoSeigaUrl(input.url)) {
     return {
-      source: 'Nico Nico Seiga',
+      source: 'Nico Nico',
       requestedUrl: input.url,
       normalizedUrl,
       status: 'invalid_url',
@@ -112,7 +128,7 @@ export async function startNicoNicoCapture(
       signals: [],
       notes: [
         'URL inválida para a fonte alvo atual.',
-        'Use uma URL do seiga.nicovideo.jp com caminho /watch/ ou /comic/.',
+        'Use uma URL do seiga.nicovideo.jp ou do sp.manga.nicovideo.jp.',
       ],
     };
   }
@@ -132,7 +148,7 @@ export async function startNicoNicoCapture(
   const signals = detectNicoNicoSignals(html);
 
   return {
-    source: 'Nico Nico Seiga',
+    source: 'Nico Nico',
     requestedUrl: input.url,
     normalizedUrl,
     status: 'inspected',
