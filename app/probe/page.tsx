@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { ManualProbeConsole } from '@/components/probe/manual-probe-console';
 import { getViewerProbeStubReport } from '@/lib/capture/viewer-network-probe-stub';
 
 type ProbePageProps = {
@@ -110,6 +111,8 @@ export default async function ProbePage({ searchParams }: ProbePageProps) {
             </ul>
           </section>
         </div>
+
+        <ManualProbeConsole />
 
         <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/5 p-5 text-sm leading-6 text-slate-300">
           <p>
