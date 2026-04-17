@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "probe:viewer:stub": "node tools/viewer-network-probe.example.mjs"
+    "probe:viewer:stub": "node tools/viewer-network-probe.example.mjs",
+    "probe:viewer": "node tools/viewer-network-probe.mjs"
   },
   "dependencies": {
     "next": "15.3.6",
