@@ -1,9 +1,11 @@
 import Link from 'next/link';
 
 import { getViewerNetworkPhaseSummary } from '@/lib/capture/viewer-network-phase';
+import { getViewerNetworkRunbook } from '@/lib/capture/viewer-network-runbook';
 
 export default function ViewerNetworkPhasePage() {
   const summary = getViewerNetworkPhaseSummary();
+  const runbook = getViewerNetworkRunbook();
 
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground">
@@ -57,6 +59,60 @@ export default function ViewerNetworkPhasePage() {
             </ul>
           </section>
         </div>
+
+        <section className="rounded-3xl border border-white/10 bg-slate-950/60 p-5">
+          <h2 className="text-xl font-semibold text-white">Runbook executável da fase</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-300">{runbook.objective}</p>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="font-semibold text-white">Ambiente recomendado</p>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-300">
+                {runbook.recommendedEnvironment.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-semibold text-white">Domínios de interesse</p>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-300">
+                {runbook.domainsOfInterest.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="font-semibold text-white">Sinais de rede a capturar</p>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-300">
+                {runbook.networkSignalsToCapture.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-semibold text-white">Critérios mínimos de sucesso</p>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-300">
+                {runbook.minimumSuccessCriteria.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm leading-6 text-slate-300">
+            <p>
+              API desta fase: <span className="font-semibold text-white">/api/viewer-network-runbook</span>
+            </p>
+            <p className="mt-2">
+              Esta rota expõe o contrato técnico da próxima etapa para que a retomada não dependa de memória ou de recomeçar a investigação.
+            </p>
+          </div>
+        </section>
 
         <div className="rounded-3xl border border-amber-400/20 bg-amber-400/5 p-5 text-sm leading-6 text-slate-300">
           <p>
