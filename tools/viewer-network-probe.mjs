@@ -17,7 +17,9 @@ function isInterestingUrl(url) {
 }
 
 function classifyResponse(url, contentType) {
+  if (/analytics\.google\.com|googletagmanager\.com/i.test(url)) return 'analytics';
   if (contentType.includes('application/json')) return 'json';
+  if (url.startsWith('blob:')) return 'blob';
   if (contentType.startsWith('image/')) return 'image';
   if (/material\//i.test(url)) return 'material';
   if (/thumb\//i.test(url)) return 'thumb';
@@ -51,6 +53,124 @@ async function runProbe(targetUrl) {
   const page = await context.newPage();
   const requests = [];
   const responses = [];
+  const runtimeEvents = [];
+
+  await page.exposeFunction('reportProbeRuntimeEvent', (event) => {
+    runtimeEvents.push({
+      ...event,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  await page.addInitScript(() => {
+    const safeReport = (event) => {
+      try {
+        window.reportProbeRuntimeEvent?.(event);
+      } catch {}
+    };
+
+    const normalizeUrl = (value) => {
+      if (!value) return null;
+      if (typeof value === 'string') return value;
+      if (value instanceof Request) return value.url;
+      if (typeof value.url === 'string') return value.url;
+      return String(value);
+    };
+
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const input = args[0];
+      const init = args[1];
+      const requestUrl = normalizeUrl(input);
+
+      safeReport({
+        type: 'fetch',
+        stage: 'start',
+        url: requestUrl,
+        method: init?.method || (input instanceof Request ? input.method : 'GET'),
+      });
+
+      const response = await originalFetch(...args);
+
+      safeReport({
+        type: 'fetch',
+        stage: 'end',
+        url: response.url || requestUrl,
+        status: response.status,
+        contentType: response.headers.get('content-type') || '',
+      });
+
+      return response;
+    };
+
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      this.__probeMethod = method;
+      this.__probeUrl = typeof url === 'string' ? url : String(url);
+      return originalOpen.call(this, method, url, ...rest);
+    };
+
+    XMLHttpRequest.prototype.send = function (...args) {
+      const currentUrl = this.__probeUrl || null;
+      const currentMethod = this.__probeMethod || 'GET';
+
+      safeReport({
+        type: 'xhr',
+        stage: 'start',
+        url: currentUrl,
+        method: currentMethod,
+      });
+
+      this.addEventListener('loadend', () => {
+        safeReport({
+          type: 'xhr',
+          stage: 'end',
+          url: currentUrl,
+          method: currentMethod,
+          status: this.status,
+          contentType: this.getResponseHeader('content-type') || '',
+        });
+      });
+
+      return originalSend.call(this, ...args);
+    };
+
+    const originalCreateObjectURL = URL.createObjectURL;
+    URL.createObjectURL = function (object) {
+      const blobUrl = originalCreateObjectURL.call(this, object);
+      safeReport({
+        type: 'blob',
+        blobUrl,
+        mimeType: object?.type || '',
+        size: typeof object?.size === 'number' ? object.size : null,
+      });
+      return blobUrl;
+    };
+
+    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function (...args) {
+      safeReport({
+        type: 'canvas-toDataURL',
+        width: this.width,
+        height: this.height,
+        mimeType: args[0] || 'image/png',
+      });
+      return originalToDataURL.apply(this, args);
+    };
+
+    const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      safeReport({
+        type: 'canvas-toBlob',
+        width: this.width,
+        height: this.height,
+        mimeType: type || 'image/png',
+      });
+      return originalToBlob.call(this, callback, type, quality);
+    };
+  });
 
   page.on('request', (request) => {
     const url = request.url();
@@ -69,15 +189,15 @@ async function runProbe(targetUrl) {
 
   page.on('response', async (response) => {
     const url = response.url();
+    const headers = response.headers();
+    const contentType = headers['content-type'] || '';
+    const kind = classifyResponse(url, contentType);
 
-    if (!isInterestingUrl(url)) {
+    if (!isInterestingUrl(url) && kind !== 'analytics') {
       return;
     }
 
-    const headers = response.headers();
-    const contentType = headers['content-type'] || '';
     const status = response.status();
-    const kind = classifyResponse(url, contentType);
 
     let payloadExcerpt = null;
     let jsonKeys = [];
@@ -107,6 +227,9 @@ async function runProbe(targetUrl) {
     if (kind === 'json') {
       console.log(`[Probe] JSON detectado: ${url}`);
     }
+    if (kind === 'blob') {
+      console.log(`[Probe] Blob detectado: ${url}`);
+    }
   });
 
   try {
@@ -114,12 +237,12 @@ async function runProbe(targetUrl) {
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
 
     console.log('[Probe] Simulando scroll para hidratar o viewer...');
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       await page.mouse.wheel(0, 2200);
       await page.waitForTimeout(1200);
     }
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     const report = {
       targetUrl,
@@ -127,8 +250,10 @@ async function runProbe(targetUrl) {
       domainsOfInterest: DOMAINS_OF_INTEREST,
       requestCount: requests.length,
       responseCount: responses.length,
+      runtimeEventCount: runtimeEvents.length,
       requests,
       responses,
+      runtimeEvents,
     };
 
     const outputPath = path.resolve(process.cwd(), 'probe-report.json');
