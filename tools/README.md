@@ -2,15 +2,17 @@
 
 Esta pasta concentra a próxima fase real do ManiacReader fora do fluxo simples do app Next.js.
 
-## Arquivo-base atual
+## Arquivos-base atuais
 
 - `viewer-network-probe.example.ts`
+- `viewer-network-probe.example.mjs`
+- `viewer-network-probe.mjs`
 
 ## Finalidade
 
-Esse arquivo existe para iniciar a fase de automação real do viewer do Nico Nico Manga.
+Esses arquivos existem para iniciar a fase de automação real do viewer do Nico Nico Manga.
 
-Ele deve ser usado para:
+O probe real deve ser usado para:
 
 1. abrir a URL do episódio em navegador automatizado
 2. interceptar requests e responses
@@ -23,15 +25,50 @@ Ele deve ser usado para:
 - não é parte do fluxo atual da Vercel Hobby
 - não resolve a leitura final sem browser automation real
 
-## Próximo uso recomendado
+## Comandos
 
-Quando a fase de automação for iniciada, o caminho correto é:
+Stub atual:
 
-1. copiar ou adaptar `viewer-network-probe.example.ts`
-2. ligar Playwright em ambiente apropriado
-3. executar contra a URL-alvo do episódio
-4. registrar requests/responses dos domínios de interesse
-5. salvar um relatório final de achados
+```bash
+npm run probe:viewer:stub
+```
+
+Probe real desta fase:
+
+```bash
+npm run probe:viewer
+```
+
+Com URL explícita:
+
+```bash
+node tools/viewer-network-probe.mjs "https://sp.manga.nicovideo.jp/watch/mg197350"
+```
+
+## Dependência necessária
+
+O probe real usa import dinâmico de `playwright`.
+
+Se o pacote não estiver instalado no ambiente, o script vai interromper e instruir:
+
+```bash
+npm install -D playwright
+```
+
+## Saída esperada
+
+Ao rodar com sucesso, o script gera:
+
+- `probe-report.json`
+
+Esse arquivo traz:
+
+- requests interceptadas
+- responses interceptadas
+- `content-type`
+- `status`
+- trechos de payload quando possível
+- classificação básica de cada resposta
 
 ## Regra importante
 
