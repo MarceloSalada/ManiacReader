@@ -5,21 +5,46 @@ import path from 'node:path';
 import process from 'node:process';
 
 const DEFAULT_TARGET_URL = 'https://sp.manga.nicovideo.jp/watch/mg197350';
-const DOMAINS_OF_INTEREST = [
+const DOMAIN_SUFFIXES_OF_INTEREST = [
+  'nicovideo.jp',
+  'nicomanga.jp',
+];
+const EXPLICIT_HOSTS_OF_INTEREST = [
   'sp.manga.nicovideo.jp',
   'manga.nicovideo.jp',
   'deliver.cdn.nicomanga.jp',
   'drm.cdn.nicomanga.jp',
-  'res.ads.nicovideo.jp',
   'api.nicomanga.jp',
+  'res.ads.nicovideo.jp',
 ];
 const MAX_STAGNANT_CYCLES = 4;
 const MAX_CAPTURE_CYCLES = 18;
-const CANDIDATE_URL_PATTERN = /manifest|content|episode|viewer|frame|page|image|drm|api/i;
-const PAYLOAD_HINT_PATTERN = /6200950|6200951|drm\.cdn\.nicomanga\.jp|frame|page|viewer|episode|image|content/i;
+const CANDIDATE_URL_PATTERN = /manifest|content|episode|viewer|frame|page|image|drm|api|scroll|crop|reading/i;
+const PAYLOAD_HINT_PATTERN =
+  /6200950|6200951|drm\.cdn\.nicomanga\.jp|deliver\.cdn\.nicomanga\.jp|frame|page|viewer|episode|image|content|scroll|crop|reading/i;
+
+function extractHostname(url) {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 function isInterestingUrl(url) {
-  return DOMAINS_OF_INTEREST.some((domain) => url.includes(domain));
+  const hostname = extractHostname(url);
+
+  if (!hostname) {
+    return false;
+  }
+
+  if (EXPLICIT_HOSTS_OF_INTEREST.includes(hostname)) {
+    return true;
+  }
+
+  return DOMAIN_SUFFIXES_OF_INTEREST.some(
+    (suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`),
+  );
 }
 
 function classifyResponse(url, contentType) {
@@ -27,11 +52,12 @@ function classifyResponse(url, contentType) {
   if (contentType.includes('application/json')) return 'json';
   if (url.startsWith('blob:')) return 'blob';
   if (/drm\.cdn\.nicomanga\.jp\/image/i.test(url)) return 'drm-image';
+  if (/deliver\.cdn\.nicomanga\.jp\/image/i.test(url)) return 'deliver-image';
   if (contentType.startsWith('image/')) return 'image';
   if (/material\//i.test(url)) return 'material';
   if (/thumb\//i.test(url)) return 'thumb';
   if (/watch\//i.test(url)) return 'watch';
-  if (/api|viewer|episode|frame|page/i.test(url)) return 'api-or-viewer';
+  if (/api|viewer|episode|frame|page|scroll|crop/i.test(url)) return 'api-or-viewer';
   return 'other';
 }
 
@@ -75,7 +101,7 @@ function extractFrameCount(snippet) {
     return null;
   }
 
-  const patterns = [/counter\\?":\\?\{[^}]*\\?"frame\\?":(\d+)/i, /\\?"frame\\?":(\d+)/i];
+  const patterns = [/"counter":\{[^}]*"frame":(\d+)/i, /"frame":(\d+)/i];
 
   for (const pattern of patterns) {
     const match = snippet.match(pattern);
@@ -92,7 +118,7 @@ function extractPlayerType(snippet) {
     return null;
   }
 
-  const patterns = [/\\?"player_type\\?":\\?"([^\\"]+)\\?"/i, /player_type":"([^"]+)"/i];
+  const patterns = [/"player_type":"([^"]+)"/i, /\\"player_type\\":\\"([^\\"]+)\\"/i];
 
   for (const pattern of patterns) {
     const match = snippet.match(pattern);
@@ -124,7 +150,7 @@ function extractNumericOrder(filename) {
 }
 
 function isAcceptedManifestAsset(response, filename) {
-  if (response.kind !== 'drm-image') {
+  if (response.kind !== 'drm-image' && response.kind !== 'deliver-image' && response.kind !== 'image') {
     return false;
   }
 
@@ -181,7 +207,7 @@ function buildManifest({ targetUrl, html, responses }) {
       numericOrder: extractNumericOrder(filename),
       url: response.url,
       filename,
-      kind: 'drm-image',
+      kind: response.kind,
     });
   });
 
@@ -223,8 +249,10 @@ function buildCandidateFindings(responses) {
   responses.forEach((response) => {
     const candidateByKind = response.kind === 'json' || response.kind === 'api-or-viewer';
     const candidateByUrl = CANDIDATE_URL_PATTERN.test(response.url);
-    const candidateByPayload = typeof response.payloadExcerpt === 'string' && PAYLOAD_HINT_PATTERN.test(response.payloadExcerpt);
-    const candidateByKeys = Array.isArray(response.jsonKeys)
+    const candidateByPayload =
+      typeof response.payloadExcerpt === 'string' && PAYLOAD_HINT_PATTERN.test(response.payloadExcerpt);
+    const candidateByKeys =
+      Array.isArray(response.jsonKeys)
       && response.jsonKeys.some((key) => CANDIDATE_URL_PATTERN.test(String(key)));
 
     if (!(candidateByKind || candidateByUrl || candidateByPayload || candidateByKeys)) {
@@ -241,6 +269,7 @@ function buildCandidateFindings(responses) {
       kind: response.kind,
       status: response.status,
       contentType: response.contentType,
+      hostname: extractHostname(response.url),
       jsonKeys: response.jsonKeys,
       payloadExcerpt: response.payloadExcerpt,
       reasons: [
@@ -268,7 +297,8 @@ function persistOutputs({ targetUrl, requests, responses, runtimeEvents, html })
   const report = {
     targetUrl,
     timestamp: new Date().toISOString(),
-    domainsOfInterest: DOMAINS_OF_INTEREST,
+    domainSuffixesOfInterest: DOMAIN_SUFFIXES_OF_INTEREST,
+    explicitHostsOfInterest: EXPLICIT_HOSTS_OF_INTEREST,
     requestCount: requests.length,
     responseCount: responses.length,
     runtimeEventCount: runtimeEvents.length,
@@ -317,6 +347,7 @@ async function loadPlaywright() {
   } catch {
     console.error('[Probe] O pacote "playwright" não está instalado neste ambiente.');
     console.error('[Probe] Instale em ambiente apropriado com: npm install -D playwright');
+    console.error('[Probe] Depois instale o navegador com: npx playwright install chromium');
     process.exit(1);
   }
 }
@@ -580,6 +611,7 @@ async function runProbe(targetUrl) {
 
     requests.push({
       url,
+      hostname: extractHostname(url),
       method: request.method(),
       resourceType: request.resourceType(),
       headers: request.headers(),
@@ -616,6 +648,7 @@ async function runProbe(targetUrl) {
 
     responses.push({
       url,
+      hostname: extractHostname(url),
       status,
       contentType,
       kind,
@@ -629,8 +662,8 @@ async function runProbe(targetUrl) {
     if (kind === 'blob') {
       console.log(`[Probe] Blob detectado: ${url}`);
     }
-    if (kind === 'drm-image') {
-      console.log(`[Probe] DRM image detectada: ${url}`);
+    if (kind === 'drm-image' || kind === 'deliver-image') {
+      console.log(`[Probe] Asset de leitura detectado: ${url}`);
     }
   });
 
