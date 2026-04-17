@@ -5,7 +5,11 @@ import { useState } from 'react';
 type CaptureResponse = {
   source: string;
   requestedUrl: string;
+  normalizedUrl: string;
   status: string;
+  title: string | null;
+  description: string | null;
+  signals: string[];
   notes: string[];
 };
 
@@ -31,7 +35,7 @@ export function CaptureForm() {
       const payload = await response.json();
 
       if (!response.ok) {
-        setError(payload.error ?? 'Falha ao iniciar a captura.');
+        setError(payload.error ?? payload.notes?.[0] ?? 'Falha ao iniciar a captura.');
         return;
       }
 
@@ -47,7 +51,7 @@ export function CaptureForm() {
     <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
       <h2 className="text-2xl font-semibold text-white">Importar capítulo</h2>
       <p className="mt-3 text-sm leading-6 text-slate-300">
-        Cole a URL de um capítulo do Nico Nico Seiga para iniciar a captura experimental no backend.
+        Cole a URL de um capítulo do Nico Nico Seiga para iniciar a inspeção experimental do backend.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -64,7 +68,7 @@ export function CaptureForm() {
           disabled={!url.trim() || isLoading}
           className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-200 transition enabled:hover:border-emerald-300/40 enabled:hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isLoading ? 'Iniciando captura...' : 'Iniciar captura'}
+          {isLoading ? 'Inspecionando capítulo...' : 'Iniciar captura'}
         </button>
       </form>
 
@@ -74,7 +78,22 @@ export function CaptureForm() {
         <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm leading-6 text-slate-300">
           <p><span className="font-semibold text-white">Fonte:</span> {result.source}</p>
           <p><span className="font-semibold text-white">Status:</span> {result.status}</p>
-          <p className="mt-3 font-semibold text-white">Notas</p>
+          <p><span className="font-semibold text-white">URL normalizada:</span> {result.normalizedUrl}</p>
+          <p className="mt-3"><span className="font-semibold text-white">Título:</span> {result.title ?? 'Não detectado'}</p>
+          <p><span className="font-semibold text-white">Descrição:</span> {result.description ?? 'Não detectada'}</p>
+
+          <p className="mt-4 font-semibold text-white">Sinais detectados</p>
+          {result.signals.length > 0 ? (
+            <ul className="mt-2 space-y-2">
+              {result.signals.map((signal) => (
+                <li key={signal}>• {signal}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2">Nenhum sinal detectado ainda.</p>
+          )}
+
+          <p className="mt-4 font-semibold text-white">Notas</p>
           <ul className="mt-2 space-y-2">
             {result.notes.map((note) => (
               <li key={note}>• {note}</li>
