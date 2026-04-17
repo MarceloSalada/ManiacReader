@@ -128,14 +128,14 @@ function extractPageFieldSignals(snippet: string | null) {
   }
 
   const fieldPatterns: Array<[string, RegExp]> = [
-    ['page', /"page"/i],
-    ['pages', /"pages"/i],
+    ['page', /\\?"page\\?"/i],
+    ['pages', /\\?"pages\\?"/i],
     ['pageCount', /pageCount|page_count|totalPage|total_page/i],
-    ['image', /"image"|"images"|imageUrl|image_url/i],
-    ['material', /"material"|materials/i],
+    ['image', /\\?"image\\?"|\\?"images\\?"|imageUrl|image_url/i],
+    ['material', /\\?"material\\?"|materials/i],
     ['viewer', /viewer/i],
     ['canvas', /canvas/i],
-    ['frame', /"frame"|counter":\{[^}]*"frame"/i],
+    ['frame', /\\?"frame\\?"|counter\\?":\\?\{[^}]*\\?"frame\\?"/i],
     ['playerType', /player_type/i],
   ];
 
@@ -147,8 +147,19 @@ function extractFrameCount(snippet: string | null) {
     return null;
   }
 
-  const match = snippet.match(/counter":\{[^}]*"frame":(\d+)/i) ?? snippet.match(/"frame":(\d+)/i);
-  return match?.[1] ? Number(match[1]) : null;
+  const patterns = [
+    /counter\\?":\\?\{[^}]*\\?"frame\\?":(\d+)/i,
+    /\\?"frame\\?":(\d+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = snippet.match(pattern);
+    if (match?.[1]) {
+      return Number(match[1]);
+    }
+  }
+
+  return null;
 }
 
 function extractPlayerType(snippet: string | null) {
@@ -156,8 +167,19 @@ function extractPlayerType(snippet: string | null) {
     return null;
   }
 
-  const match = snippet.match(/"player_type":"([^"]+)"/i);
-  return match?.[1] ?? null;
+  const patterns = [
+    /\\?"player_type\\?":\\?"([^\\"]+)\\?"/i,
+    /player_type":"([^"]+)"/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = snippet.match(pattern);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
 }
 
 export function normalizeNicoNicoUrl(rawUrl: string) {
