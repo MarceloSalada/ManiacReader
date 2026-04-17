@@ -13,6 +13,10 @@ export type CaptureChapterResult = {
   scriptSnippetCount: number;
   scriptSnippets: string[];
   endpointCandidates: string[];
+  comicId: string | null;
+  episodeId: string | null;
+  materialCandidates: string[];
+  estimatedPageCount: number;
   notes: string[];
 };
 
@@ -48,9 +52,9 @@ function extractScriptSnippets(html: string, maxCount = 8) {
   const relevant = matches
     .map((match) => match[1]?.trim() ?? '')
     .filter(Boolean)
-    .filter((script) => /episode|viewer|canvas|image|img|comic|manga|watch|api|json/i.test(script))
+    .filter((script) => /episode|viewer|canvas|image|img|comic|manga|watch|api|json|material/i.test(script))
     .slice(0, maxCount)
-    .map((script) => script.replace(/\s+/g, ' ').slice(0, 500));
+    .map((script) => script.replace(/\s+/g, ' ').slice(0, 800));
 
   return {
     total: relevant.length,
@@ -58,13 +62,31 @@ function extractScriptSnippets(html: string, maxCount = 8) {
   };
 }
 
-function extractEndpointCandidates(html: string, maxCount = 12) {
+function extractEndpointCandidates(html: string, maxCount = 16) {
   const patterns = [
-    /https?:\/\/[^"'\s]+(?:api|viewer|episode|episodes|image|images|comic|manga|json)[^"'\s]*/gi,
-    /\/[^"'\s]+(?:api|viewer|episode|episodes|image|images|comic|manga|json)[^"'\s]*/gi,
+    /https?:\/\/[^"'\s]+(?:api|viewer|episode|episodes|image|images|comic|manga|json|material)[^"'\s]*/gi,
+    /\/[^"'\s]+(?:api|viewer|episode|episodes|image|images|comic|manga|json|material)[^"'\s]*/gi,
   ];
 
   const found = patterns.flatMap((pattern) => Array.from(html.matchAll(pattern)).map((match) => match[0]));
+  return Array.from(new Set(found)).slice(0, maxCount);
+}
+
+function extractIds(html: string) {
+  const decoded = decodeHtmlEntities(html);
+  const comicMatch = decoded.match(/https:\/\/manga\.nicovideo\.jp\/comic\/(\d+)/i) ?? decoded.match(/"id":(\d+)/i);
+  const episodeMatch = decoded.match(/\["episodeId","([^"]+)"/i) ?? decoded.match(/watch\/(mg\d+)/i);
+
+  return {
+    comicId: comicMatch?.[1] ?? null,
+    episodeId: episodeMatch?.[1] ?? null,
+  };
+}
+
+function extractMaterialCandidates(html: string, maxCount = 120) {
+  const decoded = decodeHtmlEntities(html).replace(/\\\//g, '/');
+  const pattern = /https:\/\/deliver\.cdn\.nicomanga\.jp\/material\/[^"'\s,\\]+/gi;
+  const found = Array.from(decoded.matchAll(pattern)).map((match) => match[0].replace(/\\$/g, ''));
   return Array.from(new Set(found)).slice(0, maxCount);
 }
 
@@ -137,6 +159,10 @@ export function detectNicoNicoSignals(html: string) {
     signals.push('Referências ao domínio manga.nicovideo.jp detectadas');
   }
 
+  if (/deliver\.cdn\.nicomanga\.jp\/material/i.test(html)) {
+    signals.push('Referências a material do CDN detectadas');
+  }
+
   return signals;
 }
 
@@ -157,6 +183,10 @@ export async function startNicoNicoCapture(
       scriptSnippetCount: 0,
       scriptSnippets: [],
       endpointCandidates: [],
+      comicId: null,
+      episodeId: null,
+      materialCandidates: [],
+      estimatedPageCount: 0,
       notes: [
         'URL inválida para a fonte alvo atual.',
         'Use uma URL do seiga.nicovideo.jp ou do sp.manga.nicovideo.jp.',
@@ -179,6 +209,9 @@ export async function startNicoNicoCapture(
   const signals = detectNicoNicoSignals(html);
   const { total: scriptSnippetCount, snippets: scriptSnippets } = extractScriptSnippets(html);
   const endpointCandidates = extractEndpointCandidates(html);
+  const { comicId, episodeId } = extractIds(html);
+  const materialCandidates = extractMaterialCandidates(html);
+  const estimatedPageCount = materialCandidates.length;
 
   return {
     source: 'Nico Nico',
@@ -191,11 +224,16 @@ export async function startNicoNicoCapture(
     scriptSnippetCount,
     scriptSnippets,
     endpointCandidates,
+    comicId,
+    episodeId,
+    materialCandidates,
+    estimatedPageCount,
     notes: [
       'A URL foi validada contra a fonte alvo inicial.',
       'O backend já buscou o HTML da página do capítulo.',
       'Scripts relevantes e possíveis endpoints do viewer foram extraídos.',
-      'Próxima etapa: localizar o payload real das páginas.',
+      'Materiais do CDN foram separados como candidatos de páginas do episódio.',
+      'Próxima etapa: validar se esses materiais representam o episódio inteiro e em qual ordem.',
     ],
   };
 }
