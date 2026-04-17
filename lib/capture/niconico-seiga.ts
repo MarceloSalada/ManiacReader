@@ -21,6 +21,9 @@ export type CaptureChapterResult = {
   playerType: string | null;
   contentSnippet: string | null;
   pageFieldSignals: string[];
+  investigationComplete: boolean;
+  diagnosisSummary: string;
+  nextRequiredStep: string;
   notes: string[];
 };
 
@@ -283,6 +286,9 @@ export async function startNicoNicoCapture(
       playerType: null,
       contentSnippet: null,
       pageFieldSignals: [],
+      investigationComplete: false,
+      diagnosisSummary: 'URL inválida para a fonte alvo atual.',
+      nextRequiredStep: 'Use uma URL do seiga.nicovideo.jp ou do sp.manga.nicovideo.jp.',
       notes: [
         'URL inválida para a fonte alvo atual.',
         'Use uma URL do seiga.nicovideo.jp ou do sp.manga.nicovideo.jp.',
@@ -332,6 +338,11 @@ export async function startNicoNicoCapture(
     playerType,
     contentSnippet,
     pageFieldSignals,
+    investigationComplete: true,
+    diagnosisSummary:
+      'A investigação por HTML/payload inicial foi concluída: o Nico Nico entrega metadados, player_type=scroll e frameCount, mas não expõe a lista completa de leitura nesse payload inicial.',
+    nextRequiredStep:
+      'A próxima fase precisa interceptar as requisições do viewer já hidratado para descobrir de onde saem os frames ou imagens completos.',
     notes: [
       'A URL foi validada contra a fonte alvo inicial.',
       'O backend já buscou o HTML da página do capítulo.',
