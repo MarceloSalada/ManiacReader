@@ -30,6 +30,7 @@ Base limpa para o recomeço do MangaX 2.0.
 - `POST /api/capture-chapter`
 - `GET /api/chapter-status`
 - `POST /api/translate-region`
+- `GET /api/viewer-network-phase`
 
 ## Estado atual da investigação
 
@@ -61,3 +62,12 @@ A próxima fase precisa interceptar as requisições do viewer para descobrir de
 - ou metadados de corte/scroll
 
 Sem essa interceptação, continuar só no parse do HTML inicial levaria a resultados parciais e contagens falsas.
+
+## O que já ficou preparado no repositório
+
+Foi adicionada uma fase explícita de planejamento para essa próxima etapa:
+
+- `lib/capture/viewer-network-phase.ts`
+- `GET /api/viewer-network-phase`
+
+Essa rota não finge executar a interceptação. Ela apenas expõe, de forma honesta, o que a próxima fase precisa para acontecer.
