@@ -12,6 +12,7 @@
     "probe:viewer:install": "npx playwright install chromium",
     "probe:frames": "node tools/viewer-frames-capture.mjs",
     "probe:canvas": "node tools/viewer-canvas-probe.mjs",
+    "probe:blob": "node tools/viewer-blob-probe.mjs",
     "probe:summarize": "node tools/summarize-probe-report.mjs"
   },
   "dependencies": {
