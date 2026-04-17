@@ -21,6 +21,9 @@ type CaptureResponse = {
   playerType: string | null;
   contentSnippet: string | null;
   pageFieldSignals: string[];
+  investigationComplete: boolean;
+  diagnosisSummary: string;
+  nextRequiredStep: string;
   notes: string[];
 };
 
@@ -87,8 +90,14 @@ export function CaptureForm() {
 
       {result ? (
         <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm leading-6 text-slate-300">
-          <p><span className="font-semibold text-white">Fonte:</span> {result.source}</p>
+          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4">
+            <p><span className="font-semibold text-white">Diagnóstico final desta fase:</span> {result.diagnosisSummary}</p>
+            <p className="mt-2"><span className="font-semibold text-white">Próximo passo obrigatório:</span> {result.nextRequiredStep}</p>
+          </div>
+
+          <p className="mt-4"><span className="font-semibold text-white">Fonte:</span> {result.source}</p>
           <p><span className="font-semibold text-white">Status:</span> {result.status}</p>
+          <p><span className="font-semibold text-white">Investigação concluída:</span> {result.investigationComplete ? 'Sim' : 'Não'}</p>
           <p><span className="font-semibold text-white">URL normalizada:</span> {result.normalizedUrl}</p>
           <p className="mt-3"><span className="font-semibold text-white">Título:</span> {result.title ?? 'Não detectado'}</p>
           <p><span className="font-semibold text-white">Descrição:</span> {result.description ?? 'Não detectada'}</p>
@@ -131,51 +140,55 @@ export function CaptureForm() {
             <p className="mt-2">Nenhum trecho content foi extraído ainda.</p>
           )}
 
-          <p className="mt-4 font-semibold text-white">Scripts relevantes</p>
-          <p className="mt-2">{result.scriptSnippetCount}</p>
-          {result.scriptSnippets.length > 0 ? (
-            <div className="mt-3 space-y-3 text-xs leading-5 text-slate-300">
-              {result.scriptSnippets.map((snippet, index) => (
-                <div key={`${index}-${snippet}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                  {snippet}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2">Nenhum script relevante isolado ainda.</p>
-          )}
+          <details className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
+            <summary className="cursor-pointer font-semibold text-white">Ver detalhes técnicos</summary>
 
-          <p className="mt-4 font-semibold text-white">Possíveis endpoints</p>
-          {result.endpointCandidates.length > 0 ? (
-            <div className="mt-2 space-y-2 break-all text-xs leading-5 text-slate-300">
-              {result.endpointCandidates.map((endpoint) => (
-                <p key={endpoint}>{endpoint}</p>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2">Nenhum endpoint candidato detectado ainda.</p>
-          )}
+            <p className="mt-4 font-semibold text-white">Scripts relevantes</p>
+            <p className="mt-2">{result.scriptSnippetCount}</p>
+            {result.scriptSnippets.length > 0 ? (
+              <div className="mt-3 space-y-3 text-xs leading-5 text-slate-300">
+                {result.scriptSnippets.map((snippet, index) => (
+                  <div key={`${index}-${snippet}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                    {snippet}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2">Nenhum script relevante isolado ainda.</p>
+            )}
 
-          <p className="mt-4 font-semibold text-white">Materiais candidatos do episódio</p>
-          {result.materialCandidates.length > 0 ? (
-            <div className="mt-2 space-y-2 break-all text-xs leading-5 text-slate-300">
-              {result.materialCandidates.slice(0, 20).map((material) => (
-                <p key={material}>{material}</p>
-              ))}
-              {result.materialCandidates.length > 20 ? (
-                <p>Mostrando 20 de {result.materialCandidates.length} materiais.</p>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mt-2">Nenhum material candidato detectado ainda.</p>
-          )}
+            <p className="mt-4 font-semibold text-white">Possíveis endpoints</p>
+            {result.endpointCandidates.length > 0 ? (
+              <div className="mt-2 space-y-2 break-all text-xs leading-5 text-slate-300">
+                {result.endpointCandidates.map((endpoint) => (
+                  <p key={endpoint}>{endpoint}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2">Nenhum endpoint candidato detectado ainda.</p>
+            )}
 
-          <p className="mt-4 font-semibold text-white">Notas</p>
-          <ul className="mt-2 space-y-2">
-            {result.notes.map((note) => (
-              <li key={note}>• {note}</li>
-            ))}
-          </ul>
+            <p className="mt-4 font-semibold text-white">Materiais candidatos do episódio</p>
+            {result.materialCandidates.length > 0 ? (
+              <div className="mt-2 space-y-2 break-all text-xs leading-5 text-slate-300">
+                {result.materialCandidates.slice(0, 20).map((material) => (
+                  <p key={material}>{material}</p>
+                ))}
+                {result.materialCandidates.length > 20 ? (
+                  <p>Mostrando 20 de {result.materialCandidates.length} materiais.</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-2">Nenhum material candidato detectado ainda.</p>
+            )}
+
+            <p className="mt-4 font-semibold text-white">Notas</p>
+            <ul className="mt-2 space-y-2">
+              {result.notes.map((note) => (
+                <li key={note}>• {note}</li>
+              ))}
+            </ul>
+          </details>
         </div>
       ) : null}
     </div>
