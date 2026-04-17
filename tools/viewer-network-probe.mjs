@@ -9,6 +9,7 @@ const DOMAINS_OF_INTEREST = [
   'sp.manga.nicovideo.jp',
   'manga.nicovideo.jp',
   'deliver.cdn.nicomanga.jp',
+  'drm.cdn.nicomanga.jp',
   'res.ads.nicovideo.jp',
 ];
 
@@ -20,6 +21,7 @@ function classifyResponse(url, contentType) {
   if (/analytics\.google\.com|googletagmanager\.com/i.test(url)) return 'analytics';
   if (contentType.includes('application/json')) return 'json';
   if (url.startsWith('blob:')) return 'blob';
+  if (/drm\.cdn\.nicomanga\.jp\/image/i.test(url)) return 'drm-image';
   if (contentType.startsWith('image/')) return 'image';
   if (/material\//i.test(url)) return 'material';
   if (/thumb\//i.test(url)) return 'thumb';
@@ -36,6 +38,34 @@ async function loadPlaywright() {
     console.error('[Probe] Instale em ambiente apropriado com: npm install -D playwright');
     process.exit(1);
   }
+}
+
+async function performProgressiveScroll(page) {
+  console.log('[Probe] Iniciando rolagem progressiva longa...');
+
+  for (let cycle = 0; cycle < 5; cycle += 1) {
+    for (let step = 0; step < 8; step += 1) {
+      await page.mouse.wheel(0, 1400);
+      await page.waitForTimeout(900);
+    }
+
+    await page.evaluate(() => {
+      window.scrollBy({ top: window.innerHeight * 1.2, behavior: 'instant' });
+    });
+    await page.waitForTimeout(1200);
+
+    await page.keyboard.press('PageDown').catch(() => null);
+    await page.waitForTimeout(800);
+  }
+
+  await page.evaluate(async () => {
+    for (let index = 0; index < 12; index += 1) {
+      window.scrollBy(0, Math.floor(window.innerHeight * 0.9));
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  });
+
+  await page.waitForTimeout(5000);
 }
 
 async function runProbe(targetUrl) {
@@ -230,19 +260,17 @@ async function runProbe(targetUrl) {
     if (kind === 'blob') {
       console.log(`[Probe] Blob detectado: ${url}`);
     }
+    if (kind === 'drm-image') {
+      console.log(`[Probe] DRM image detectada: ${url}`);
+    }
   });
 
   try {
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => null);
 
-    console.log('[Probe] Simulando scroll para hidratar o viewer...');
-    for (let index = 0; index < 10; index += 1) {
-      await page.mouse.wheel(0, 2200);
-      await page.waitForTimeout(1200);
-    }
-
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500);
+    await performProgressiveScroll(page);
 
     const report = {
       targetUrl,
