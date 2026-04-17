@@ -24,6 +24,8 @@ Base limpa para o recomeço do MangaX 2.0.
 - `/` — home
 - `/import` — inspeção experimental do capítulo
 - `/reader` — shell do leitor
+- `/viewer-network-phase` — descrição da próxima fase
+- `/status` — status consolidado do projeto
 
 ## APIs
 
@@ -31,6 +33,8 @@ Base limpa para o recomeço do MangaX 2.0.
 - `GET /api/chapter-status`
 - `POST /api/translate-region`
 - `GET /api/viewer-network-phase`
+- `GET /api/viewer-network-runbook`
+- `GET /api/project-status`
 
 ## Estado atual da investigação
 
@@ -68,6 +72,9 @@ Sem essa interceptação, continuar só no parse do HTML inicial levaria a resul
 Foi adicionada uma fase explícita de planejamento para essa próxima etapa:
 
 - `lib/capture/viewer-network-phase.ts`
+- `lib/capture/viewer-network-runbook.ts`
+- `tools/viewer-network-probe.example.ts`
 - `GET /api/viewer-network-phase`
+- `GET /api/viewer-network-runbook`
 
-Essa rota não finge executar a interceptação. Ela apenas expõe, de forma honesta, o que a próxima fase precisa para acontecer.
+Esses arquivos não fingem executar a interceptação. Eles deixam clara a próxima fase e fornecem uma base objetiva para a implementação real fora do fluxo simples da Vercel Hobby.
