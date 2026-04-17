@@ -11,6 +11,11 @@ const cards = [
     description: 'Entre no leitor para validar navegação, páginas e regiões de balão.',
     href: '/reader',
   },
+  {
+    title: 'Próxima fase técnica',
+    description: 'Veja o plano real para interceptar as requisições do viewer do Nico Nico Manga.',
+    href: '/viewer-network-phase',
+  },
 ];
 
 export default function HomePage() {
@@ -24,7 +29,7 @@ export default function HomePage() {
             Este projeto recomeça do zero com foco em backend-first: capturar capítulos, abrir páginas no reader e só depois avançar para OCR e tradução.
           </p>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
             {cards.map((card) => (
               <Link
                 key={card.title}
