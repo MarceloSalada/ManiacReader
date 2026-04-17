@@ -13,6 +13,10 @@ type CaptureResponse = {
   scriptSnippetCount: number;
   scriptSnippets: string[];
   endpointCandidates: string[];
+  comicId: string | null;
+  episodeId: string | null;
+  materialCandidates: string[];
+  estimatedPageCount: number;
   notes: string[];
 };
 
@@ -85,6 +89,11 @@ export function CaptureForm() {
           <p className="mt-3"><span className="font-semibold text-white">Título:</span> {result.title ?? 'Não detectado'}</p>
           <p><span className="font-semibold text-white">Descrição:</span> {result.description ?? 'Não detectada'}</p>
 
+          <p className="mt-4 font-semibold text-white">IDs detectados</p>
+          <p><span className="font-semibold text-white">Comic ID:</span> {result.comicId ?? 'Não detectado'}</p>
+          <p><span className="font-semibold text-white">Episode ID:</span> {result.episodeId ?? 'Não detectado'}</p>
+          <p><span className="font-semibold text-white">Estimativa inicial de páginas:</span> {result.estimatedPageCount}</p>
+
           <p className="mt-4 font-semibold text-white">Sinais detectados</p>
           {result.signals.length > 0 ? (
             <ul className="mt-2 space-y-2">
@@ -119,6 +128,20 @@ export function CaptureForm() {
             </div>
           ) : (
             <p className="mt-2">Nenhum endpoint candidato detectado ainda.</p>
+          )}
+
+          <p className="mt-4 font-semibold text-white">Materiais candidatos do episódio</p>
+          {result.materialCandidates.length > 0 ? (
+            <div className="mt-2 space-y-2 break-all text-xs leading-5 text-slate-300">
+              {result.materialCandidates.slice(0, 20).map((material) => (
+                <p key={material}>{material}</p>
+              ))}
+              {result.materialCandidates.length > 20 ? (
+                <p>Mostrando 20 de {result.materialCandidates.length} materiais.</p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-2">Nenhum material candidato detectado ainda.</p>
           )}
 
           <p className="mt-4 font-semibold text-white">Notas</p>
