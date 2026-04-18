@@ -12,29 +12,29 @@ export type ProjectStatusSummary = {
 export function getProjectStatusSummary(): ProjectStatusSummary {
   return {
     projectName: 'ManiacReader',
-    currentStage: 'HTML/payload investigation closed; viewer-network phase prepared',
+    currentStage: 'Comic Walker manifesto loads in reader; page selection still contaminated by site assets',
     completedFindings: [
-      'Nico Nico Manga source validated for the target episode URL.',
-      'comicId and episodeId can be extracted from the initial payload.',
-      'player_type is scroll.',
-      'frameCount is 42 for the tested episode.',
-      'Initial material URLs found in the HTML do not represent the full reading sequence.',
+      'Comic Walker episode URL is valid and reachable.',
+      'The reader already loads the Comic Walker manifesto and opens the target episode.',
+      'The image proxy already accepts Comic Walker hosts.',
+      'The Comic Walker probe already generates a local manifest for KC_0085660000200011_E.',
+      'The current issue is no longer manifest loading or host permission.',
     ],
     closedQuestions: [
-      'Is the target URL valid and readable from the backend?',
-      'Does the HTML initial payload expose enough information to detect viewer mode?',
-      'Are the first CDN materials equivalent to full chapter pages? No.',
+      'Can the project leave the Nico-only flow and open Comic Walker in /reader? Yes.',
+      'Does the current stack already support Comic Walker image proxying? Yes.',
+      'Is the current blocker still related to DRM/descramble like Nico? Not at this stage.',
     ],
     openQuestions: [
-      'Which hydrated viewer request returns the actual reading units?',
-      'Are the reading units full images, frames, or cropped scroll segments?',
-      'What is the correct ingestion strategy for /reader once those units are known?',
+      'Which Comic Walker requests correspond only to real chapter pages?',
+      'How should the probe exclude sprites, badges, promotion assets and app UI images?',
+      'Is there a cleaner JSON/viewer endpoint exposing the real ordered page list?',
     ],
     blockedBy: [
-      'Real browser automation and network interception are not implemented in the current stack.',
-      'The current Next.js + Vercel Hobby phase is not enough to derive the complete reading list from HTML alone.',
+      'The Comic Walker probe still captures UI assets together with real chapter pages.',
+      'The reader renders everything in units[] without a second validation layer.',
     ],
-    nextPhaseName: 'viewer-network-interception',
-    nextPhaseEntryPoints: ['/viewer-network-phase', '/api/viewer-network-phase', '/api/viewer-network-runbook'],
+    nextPhaseName: 'comicwalker-page-isolation',
+    nextPhaseEntryPoints: ['/reader', '/status', '/import'],
   };
 }
