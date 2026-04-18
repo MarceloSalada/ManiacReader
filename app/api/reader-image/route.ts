@@ -6,13 +6,26 @@ function isAllowedRemote(url: URL) {
     hostname === 'drm.cdn.nicomanga.jp' ||
     hostname === 'deliver.cdn.nicomanga.jp' ||
     hostname === 'sp.manga.nicovideo.jp' ||
-    hostname === 'manga.nicovideo.jp'
+    hostname === 'manga.nicovideo.jp' ||
+    hostname === 'cdn.comic-walker.com' ||
+    hostname === 'comic-walker.com'
   );
+}
+
+function buildOrigin(remoteUrl: URL) {
+  const hostname = remoteUrl.hostname.toLowerCase();
+
+  if (hostname.includes('comic-walker.com')) {
+    return 'https://comic-walker.com';
+  }
+
+  return 'https://sp.manga.nicovideo.jp';
 }
 
 export async function GET(request: NextRequest) {
   const src = request.nextUrl.searchParams.get('src');
-  const referer = request.nextUrl.searchParams.get('referer') || 'https://sp.manga.nicovideo.jp/';
+  const referer =
+    request.nextUrl.searchParams.get('referer') || 'https://comic-walker.com/';
 
   if (!src) {
     return NextResponse.json({ error: 'Parâmetro src é obrigatório.' }, { status: 400 });
@@ -26,14 +39,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (!isAllowedRemote(remoteUrl)) {
-    return NextResponse.json({ error: 'Host remoto não permitido.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Host remoto não permitido.', host: remoteUrl.hostname },
+      { status: 400 },
+    );
   }
 
   try {
     const upstream = await fetch(remoteUrl, {
       headers: {
         Referer: referer,
-        Origin: 'https://sp.manga.nicovideo.jp',
+        Origin: buildOrigin(remoteUrl),
         'User-Agent':
           'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -53,7 +69,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const contentType = upstream.headers.get('content-type') || 'image/webp';
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
     const buffer = await upstream.arrayBuffer();
 
     return new NextResponse(buffer, {
