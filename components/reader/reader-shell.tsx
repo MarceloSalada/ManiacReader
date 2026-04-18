@@ -10,7 +10,7 @@ type ReaderShellProps = {
   episodeId?: string;
 };
 
-const DEFAULT_EPISODE_ID = 'mg197350';
+const DEFAULT_EPISODE_ID = 'KC_0085660000200011_E';
 
 export function ReaderShell({ episodeId = DEFAULT_EPISODE_ID }: ReaderShellProps) {
   const [manifest, setManifest] = useState<ChapterManifest | null>(null);
