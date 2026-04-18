@@ -36,7 +36,7 @@ function normalizeManifest(rawManifest: unknown): ChapterManifest | null {
   const targetUrl = candidate.targetUrl;
   const unitsRaw = Array.isArray(candidate.units) ? candidate.units : [];
 
-  if (source !== 'Nico Nico' || typeof targetUrl !== 'string') {
+  if ((source !== 'Nico Nico' && source !== 'Comic Walker') || typeof targetUrl !== 'string') {
     return null;
   }
 
