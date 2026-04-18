@@ -8,22 +8,22 @@ const cards = [
   },
   {
     title: 'Abrir reader',
-    description: 'Entre no leitor para validar navegação, páginas e regiões de balão.',
+    description: 'Entre no leitor para validar manifesto, páginas reais e ruído capturado.',
     href: '/reader',
   },
   {
-    title: 'Próxima fase técnica',
-    description: 'Veja o plano real para interceptar as requisições do viewer do Nico Nico Manga.',
-    href: '/viewer-network-phase',
-  },
-  {
     title: 'Status do projeto',
-    description: 'Veja o que já foi concluído, o que foi fechado e o que ainda falta nesta investigação.',
+    description: 'Veja o que já foi resolvido no Comic Walker e qual é o bloqueio técnico atual.',
     href: '/status',
   },
   {
+    title: 'Fase legada do Nico',
+    description: 'Consulte a documentação antiga da investigação de viewer do Nico Nico.',
+    href: '/viewer-network-phase',
+  },
+  {
     title: 'Viewer Probe Stub',
-    description: 'Veja no deploy da Vercel o ponto de entrada visual da próxima fase de interceptação.',
+    description: 'Ponto de entrada visual de probe e validação do fluxo experimental.',
     href: '/probe',
   },
 ];
@@ -34,9 +34,9 @@ export default function HomePage() {
       <div className="mx-auto max-w-6xl">
         <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/30">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">ManiacReader</p>
-          <h1 className="mt-3 text-4xl font-bold text-white">Base limpa para o MangaX 2.0</h1>
+          <h1 className="mt-3 text-4xl font-bold text-white">Base de reader e investigação para o MangaX 2.0</h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300 md:text-base">
-            Este projeto recomeça do zero com foco em backend-first: capturar capítulos, abrir páginas no reader e só depois avançar para OCR e tradução.
+            O foco atual saiu do Nico como alvo principal e está concentrado em Comic Walker. A arquitetura probe → manifesto → reader já funciona, mas o manifesto ainda mistura páginas reais com assets de interface do site.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
