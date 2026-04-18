@@ -40,6 +40,16 @@ function extractHostname(url) {
   }
 }
 
+function extractFilenameFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    return parts.at(-1) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function isInterestingUrl(url) {
   const host = extractHostname(url);
   if (!host) return false;
@@ -62,37 +72,49 @@ function classifyResponse(url, contentType) {
   return 'other';
 }
 
-function extractFilenameFromUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    return parts.at(-1) ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function looksLikeComicPage(url) {
   const lower = url.toLowerCase();
+  const filename = extractFilenameFromUrl(url)?.toLowerCase() ?? '';
 
   if (!lower.includes('cdn.comic-walker.com')) return false;
-  if (!/\.(jpg|jpeg|png|webp)$/i.test(lower)) return false;
-  if (lower.endsWith('.svg')) return false;
-  if (lower.includes('sprite')) return false;
-  if (lower.includes('logo')) return false;
-  if (lower.includes('icon')) return false;
-  if (lower.includes('dots')) return false;
-  if (lower.includes('promotion')) return false;
-  if (lower.includes('downloadcode')) return false;
-  if (lower.includes('apppromotion')) return false;
-  if (lower.includes('applogo')) return false;
+  if (!filename) return false;
+  if (!/\.(jpg|jpeg|png|webp)$/i.test(filename)) return false;
+  if (filename.endsWith('.svg')) return false;
   if (lower.includes('/library/assets/')) return false;
 
-  return (
-    lower.includes('/integration/cdpf/resources/') ||
-    lower.includes('/resized/') ||
-    /\/\d{6,}[_-]/.test(lower)
-  );
+  const blockedFragments = [
+    'sprite',
+    'dots',
+    'logo',
+    'icon',
+    'badge',
+    'promotion',
+    'downloadcode',
+    'appstore',
+    'apppromotion',
+    'applogo',
+    'abj',
+  ];
+
+  if (blockedFragments.some((fragment) => filename.includes(fragment) || lower.includes(fragment))) {
+    return false;
+  }
+
+  const likelyPagePatterns = [
+    /^\d{6,}_[0-9_]+\.(jpg|jpeg|png|webp)$/i,
+    /^\d{6,}-[0-9_]+\.(jpg|jpeg|png|webp)$/i,
+    /^\d{6,}[a-z0-9_-]*\.(jpg|jpeg|png|webp)$/i,
+  ];
+
+  if (likelyPagePatterns.some((pattern) => pattern.test(filename))) {
+    return true;
+  }
+
+  if (lower.includes('/integration/cdpf/resources/') && lower.includes('/resized/')) {
+    return true;
+  }
+
+  return false;
 }
 
 function buildManifest({ targetUrl, responses }) {
@@ -107,12 +129,16 @@ function buildManifest({ targetUrl, responses }) {
   const units = [];
 
   for (const item of imageResponses) {
-    if (!item.url || seen.has(item.url)) continue;
-    seen.add(item.url);
+    if (!item.url) continue;
+    const filename = extractFilenameFromUrl(item.url);
+    const key = `${filename ?? 'no-file'}::${item.url}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
     units.push({
       index: units.length + 1,
       url: item.url,
-      filename: extractFilenameFromUrl(item.url),
+      filename,
       kind: 'image',
     });
   }
