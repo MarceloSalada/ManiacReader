@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_TARGET_URL = 'https://comic-walker.com/detail/KC_008566_S/episodes/KC_0085660000200011_E';
+const DEFAULT_TARGET_URL =
+  'https://comic-walker.com/detail/KC_008566_S/episodes/KC_0085660000200011_E';
 const WAIT_AFTER_OPEN_MS = 10000;
 
 function ensureDirectory(dirPath) {
@@ -71,11 +72,37 @@ function extractFilenameFromUrl(url) {
   }
 }
 
+function looksLikeComicPage(url) {
+  const lower = url.toLowerCase();
+
+  if (!lower.includes('cdn.comic-walker.com')) return false;
+  if (!/\.(jpg|jpeg|png|webp)$/i.test(lower)) return false;
+  if (lower.endsWith('.svg')) return false;
+  if (lower.includes('sprite')) return false;
+  if (lower.includes('logo')) return false;
+  if (lower.includes('icon')) return false;
+  if (lower.includes('dots')) return false;
+  if (lower.includes('promotion')) return false;
+  if (lower.includes('downloadcode')) return false;
+  if (lower.includes('apppromotion')) return false;
+  if (lower.includes('applogo')) return false;
+  if (lower.includes('/library/assets/')) return false;
+
+  return (
+    lower.includes('/integration/cdpf/resources/') ||
+    lower.includes('/resized/') ||
+    /\/\d{6,}[_-]/.test(lower)
+  );
+}
+
 function buildManifest({ targetUrl, responses }) {
   const episodeId = extractEpisodeId(targetUrl);
   const seriesId = extractSeriesId(targetUrl);
 
-  const imageResponses = responses.filter((item) => item.kind === 'image');
+  const imageResponses = responses.filter(
+    (item) => item.kind === 'image' && item.url && looksLikeComicPage(item.url),
+  );
+
   const seen = new Set();
   const units = [];
 
@@ -94,8 +121,9 @@ function buildManifest({ targetUrl, responses }) {
     source: 'Comic Walker',
     targetUrl,
     seriesId,
+    comicId: seriesId,
     episodeId,
-    playerType: null,
+    playerType: 'image-sequence',
     frameCount: units.length || null,
     capturedCount: units.length,
     isComplete: units.length > 0,
@@ -250,8 +278,10 @@ async function main(targetUrl) {
       runtimeEvents,
       manifestSummary: {
         source: manifest.source,
+        comicId: manifest.comicId,
         seriesId: manifest.seriesId,
         episodeId: manifest.episodeId,
+        playerType: manifest.playerType,
         frameCount: manifest.frameCount,
         capturedCount: manifest.capturedCount,
         isComplete: manifest.isComplete,
