@@ -13,6 +13,7 @@
     "probe:frames": "node tools/viewer-frames-capture.mjs",
     "probe:canvas": "node tools/viewer-canvas-probe.mjs",
     "probe:blob": "node tools/viewer-blob-probe.mjs",
+    "probe:comicwalker": "node tools/comicwalker-probe.mjs",
     "probe:summarize": "node tools/summarize-probe-report.mjs"
   },
   "dependencies": {
