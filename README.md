@@ -1,115 +1,122 @@
 # ManiacReader
 
-Base limpa para o recomeço do MangaX 2.0.
+Base de investigação e reader para o recomeço do MangaX 2.0.
 
 ## Stack
 
 - Next.js
 - TypeScript
 - Tailwind CSS
-- Vercel
-- Playwright (para a fase real de probe do viewer)
+- Vercel / Codespaces
+- Playwright (para probes reais de viewer)
 
 ## Objetivo desta fase
 
 1. Validar a fonte alvo no backend.
-2. Identificar como o viewer entrega a leitura real.
-3. Transformar a captura real em manifesto utilizável pelo reader.
+2. Descobrir como o viewer entrega as páginas reais.
+3. Transformar a captura em manifesto utilizável pelo reader.
 4. Só depois avançar para proxy, OCR e tradução.
 
-## Fonte alvo inicial
+## Fonte alvo atual prioritária
+
+- Comic Walker
+
+## Fonte legado ainda presente no código
 
 - Nico Nico Manga / Nico Nico Seiga
+
+Essa parte não é mais a frente principal da investigação. Ela continua no repositório apenas como legado técnico e referência de tentativas anteriores.
 
 ## Rotas principais
 
 - `/` — home
 - `/import` — inspeção experimental do capítulo
 - `/reader` — reader guiado por manifesto
-- `/viewer-network-phase` — descrição da próxima fase
 - `/status` — status consolidado do projeto
+- `/viewer-network-phase` — documentação de fase legada do Nico
+- `/probe` — stub visual de probe
 
-## APIs
+## APIs principais
 
 - `POST /api/capture-chapter`
 - `GET /api/chapter-status`
-- `POST /api/translate-region`
-- `GET /api/viewer-network-phase`
-- `GET /api/viewer-network-runbook`
 - `GET /api/project-status`
+- `GET /api/reader-image`
 
 ## Estado atual da investigação
 
-Para a URL de teste `https://sp.manga.nicovideo.jp/watch/mg197350`, o backend já conseguiu confirmar:
+Para a URL de teste do Comic Walker
 
-- `comicId = 23827`
-- `episodeId = mg197350`
-- `player_type = scroll`
-- `frameCount = 42`
-- alguns materiais do CDN aparecem no HTML inicial, mas **não representam a contagem real de leitura**
+- `https://comic-walker.com/detail/KC_008566_S/episodes/KC_0085660000200011_E`
 
-## Host map já validado
+já foi confirmado:
 
-### Confirmado
+- o reader consegue carregar o manifesto do episódio
+- o proxy de imagem aceita hosts do Comic Walker
+- o probe do Comic Walker gera `public/manifests/KC_0085660000200011_E.json`
+- o episódio aparece no reader com `source = Comic Walker`
 
-- `sp.manga.nicovideo.jp` = entrada do viewer
-- `manga.nicovideo.jp` = host relacionado ao manga
-- `nicomanga.jp` = domínio ativo com subdomínios reais
+## Problema atual
 
-### Ainda não confirmado por enumeração DNS
+O gargalo atual não é mais manifesto nem host bloqueado.
 
-- `api.nicomanga.jp`
-- `drm.cdn.nicomanga.jp`
+O manifesto do Comic Walker ainda mistura:
 
-Esses hosts podem aparecer no runtime, mas não devem mais ser tratados como verdade apenas por hipótese.
+- páginas reais do capítulo
+- assets de interface do site
+- imagens promocionais / logos / badges / sprites
+
+Exemplos já observados na captura:
+
+- `sprite...svg`
+- `dots...svg`
+- `AppPromotion...png`
+- `AppStoreBadge...svg`
+- `ABJMark...svg`
+
+Ao mesmo tempo, o manifesto também já encontra arquivos com cara de página real, como:
+
+- `008566_001_01_0001.jpg`
+- `008592_001_01_0001.jpg`
+- `004657_001_01_0001.jpg`
 
 ## Conclusão desta etapa
 
-O Nico Nico não entrega esse episódio como uma lista simples de páginas no HTML inicial.
+A arquitetura base do ManiacReader já funciona para Comic Walker:
 
-O viewer trabalha com:
+- probe → manifesto → reader
 
-- payload do Next.js com metadados
-- leitura em modo `scroll`
-- contagem de `frame`
-- assets carregados depois da hidratação do viewer
+O bloqueio atual é de seleção correta das páginas do capítulo, não de engenharia reversa pesada como no Nico.
 
 ## Próxima etapa técnica real
 
-A próxima fase precisa interceptar as requisições do viewer para descobrir de onde saem:
+A próxima fase precisa descobrir uma forma confiável de capturar somente as páginas reais do Comic Walker.
 
-- frames completos
-- imagens reais de leitura
-- ou metadados de corte/scroll
+Possíveis caminhos:
 
-Sem essa interceptação, continuar só no parse do HTML inicial levaria a resultados parciais e contagens falsas.
+- apertar o filtro do probe
+- localizar um endpoint/JSON do viewer com a lista real de páginas
+- excluir assets de interface por path, nome, tipo MIME ou contexto de request
 
 ## O que já ficou preparado no repositório
 
-Foi adicionada uma fase explícita de planejamento para essa próxima etapa:
+- `tools/comicwalker-probe.mjs`
+- `app/api/reader-image/route.ts`
+- `public/manifests/<episodeId>.json`
+- `components/reader/*`
+- `lib/reader/*`
 
-- `lib/capture/viewer-network-phase.ts`
-- `lib/capture/viewer-network-runbook.ts`
-- `tools/viewer-network-probe.example.mjs`
-- `tools/viewer-network-probe.mjs`
-- `GET /api/viewer-network-phase`
-- `GET /api/viewer-network-runbook`
+## Fluxo atual do reader
 
-## Fluxo novo do reader
-
-O probe real agora também gera um manifesto local para o episódio capturado:
+O reader consome um manifesto local:
 
 - `public/manifests/<episodeId>.json`
 
-O `reader` passou a consumir esse manifesto.
+Exemplo atual prioritário:
 
-Exemplo:
+- `/reader?episodeId=KC_0085660000200011_E`
 
-- `/reader?episodeId=mg197350`
-
-Se o manifesto ainda não existir, o reader mostra uma mensagem objetiva pedindo para rodar o probe antes.
-
-## Como rodar o probe real
+## Como rodar o probe atual do Comic Walker
 
 Instale dependências:
 
@@ -123,48 +130,35 @@ Instale o Chromium do Playwright:
 npm run probe:viewer:install
 ```
 
-Execute o probe:
+Execute o probe do Comic Walker:
 
 ```bash
-npm run probe:viewer
+npm run probe:comicwalker
 ```
 
-Também é possível passar uma URL-alvo:
+Também é possível passar outra URL-alvo:
 
 ```bash
-node tools/viewer-network-probe.mjs https://sp.manga.nicovideo.jp/watch/mg197350
+node tools/comicwalker-probe.mjs https://comic-walker.com/detail/KC_008566_S/episodes/KC_0085660000200011_E
 ```
 
-## Saídas esperadas do probe real
+## Saídas esperadas do probe
 
 Ao rodar:
 
 ```bash
-npm run probe:viewer
+npm run probe:comicwalker
 ```
 
 as saídas esperadas são:
 
-- `probe-report.json`
+- `debug/<episodeId>/comicwalker-probe-report.json`
 - `public/manifests/<episodeId>.json`
-
-O manifesto inclui:
-
-- `source`
-- `targetUrl`
-- `comicId`
-- `episodeId`
-- `playerType`
-- `frameCount`
-- `capturedCount`
-- `isComplete`
-- `units[]`
 
 ## Critério de avanço de fase
 
-O projeto só deve avançar para proxy, OCR e tradução depois que o reader estiver conseguindo:
+O projeto só deve avançar para OCR e tradução depois que o reader estiver conseguindo:
 
-- abrir um manifesto real
-- renderizar as unidades capturadas
-- indicar se a captura está completa ou parcial
-- operar sem placeholder
+- abrir o manifesto real do Comic Walker
+- renderizar apenas páginas reais do capítulo
+- operar sem assets de interface misturados como páginas
