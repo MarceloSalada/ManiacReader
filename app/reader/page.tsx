@@ -10,9 +10,11 @@ function readFirst(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+const DEFAULT_EPISODE_ID = 'KC_0085660000200011_E';
+
 export default async function ReaderPage({ searchParams }: ReaderPageProps) {
   const params = searchParams ? await searchParams : {};
-  const episodeId = readFirst(params.episodeId) ?? 'mg197350';
+  const episodeId = readFirst(params.episodeId) ?? DEFAULT_EPISODE_ID;
 
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground">
