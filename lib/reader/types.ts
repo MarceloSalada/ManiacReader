@@ -7,8 +7,10 @@ export type ReaderUnit = {
   kind: ReaderUnitKind;
 };
 
+export type ReaderSource = 'Nico Nico' | 'Comic Walker';
+
 export type ChapterManifest = {
-  source: 'Nico Nico';
+  source: ReaderSource;
   targetUrl: string;
   comicId: string | null;
   episodeId: string | null;
